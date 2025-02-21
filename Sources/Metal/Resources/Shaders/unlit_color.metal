@@ -1,5 +1,4 @@
 #include <metal_stdlib>
-#include <simd/simd.h>
 
 #include "common.metal"
 
@@ -24,10 +23,10 @@ vertex ResterizerData vertex_unlit_color(
     return output;
 }
 
-fragment half4 fragment_unlit_color(
+fragment float4 fragment_unlit_color(
     ResterizerData input                [[stage_in]],
     constant Globals& globals           [[buffer(0)]],
-    constant half4& color               [[buffer(1)]]
+    constant float4& color              [[buffer(1)]]
 ) {
     return color;
 }

@@ -126,6 +126,10 @@ public enum Keycode: UInt16 {
 
 public class Input {
     private var store: Set<Keycode> = .init()
+    
+    private var pressed: Set<Keycode> = .init()
+    private var released: Set<Keycode> = .init()
+    
     public private(set) var deltaX: Float = 0
     public private(set) var deltaY: Float = 0
     
@@ -141,15 +145,30 @@ public class Input {
         deltaY = 0
     }
     
+    public func clearKeyboardUpdates() {
+        pressed.removeAll()
+        released.removeAll()
+    }
+    
     public func pressed(_ key: Keycode) {
         store.insert(key)
+        pressed.insert(key)
     }
     
     public func released(_ key: Keycode) {
         store.remove(key)
+        released.insert(key)
+    }
+    
+    public func isHeld(_ key: Keycode) -> Bool {
+        store.contains(key)
     }
     
     public func isPressed(_ key: Keycode) -> Bool {
-        store.contains(key)
+        pressed.contains(key)
+    }
+    
+    public func isReleased(_ key: Keycode) -> Bool {
+        released.contains(key)
     }
 }

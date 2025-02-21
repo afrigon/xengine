@@ -1,6 +1,6 @@
 import Foundation
 
-public class GameObject: GameUpdatable, Identifiable {
+public class GameObject: GameUpdatable, Identifiable, Toggleable {
     public var name: String? = nil
     public var enabled: Bool = true
 

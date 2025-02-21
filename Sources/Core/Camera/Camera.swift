@@ -5,13 +5,18 @@ public class Camera {
     public private(set) var viewProjectionMatrix: simd_float4x4
     public private(set) var projectionMatrix: simd_float4x4
     
+    public var postProcessing: PostProcessing
+    public var wireframe: Bool = false
+
     public var clear: Color = .init(red: 0.1, green: 0.1, blue: 0.1)
     
     public init(
         transform: Transform = .init(),
-        projection: Projection = .perspective()
+        projection: Projection = .perspective(),
+        postProcessing: PostProcessing = .init(effects: [])
     ) {
         self.transform = transform
+        self.postProcessing = postProcessing
         projectionMatrix = projection.matrix
         viewProjectionMatrix = projectionMatrix * transform.matrix.inverse
     }

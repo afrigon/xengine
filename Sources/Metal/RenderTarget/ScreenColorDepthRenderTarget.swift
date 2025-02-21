@@ -7,7 +7,7 @@ class ScreenColorDepthRenderTarget: RenderTarget {
     private let colorFormat: MTLPixelFormat
     private let depthFormat: MTLPixelFormat
     
-    private var clearColor: Color = .init(red: 0.2, green: 0.2, blue: 0.2)
+    private var clearColor: Color = .init(red: 255.0, green: 0.2, blue: 0.2)
     
     init(colorFormat: MTLPixelFormat, depthFormat: MTLPixelFormat) {
         self.colorFormat = colorFormat

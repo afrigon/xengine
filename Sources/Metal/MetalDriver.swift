@@ -2,12 +2,16 @@ import MetalKit
 import XEngineCore
 
 public class MetalDriver: NSObject, MTKViewDelegate {
-    private var input: Input = .init()
+    public var input: Input = .init()
     private var renderer: MetalRenderer
     
     // State
     private var globals: Globals = .init()
     private var scene: GameScene
+    
+    public var resourceRepository: ResourceRepository {
+        renderer.repository
+    }
 
     public init?(scene: GameScene) {
         self.scene = scene
@@ -43,6 +47,7 @@ public class MetalDriver: NSObject, MTKViewDelegate {
         
         scene.update(input: input, delta: delta)
         input.clearCursorDelta()
+        input.clearKeyboardUpdates()
         
         globals.projectionMatrix = scene.camera.projectionMatrix
         globals.viewMatrix = scene.camera.transform.matrix.inverse

@@ -26,7 +26,7 @@ public struct MetalView: UIViewRepresentable {
 
 #if canImport(AppKit)
 public struct MetalView: NSViewRepresentable {
-    weak var driver: MetalRenderer?
+    weak var driver: MetalDriver?
     var onSetup: (() -> Void)?
     
     public init(driver: MetalDriver, onSetup: (() -> Void)? = nil) {

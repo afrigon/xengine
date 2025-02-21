@@ -2,8 +2,8 @@ import Metal
 import XEngineCore
 
 class ColorDepthRenderTarget: RenderTarget {
-    private var colorTexture: MTLTexture? = nil
-    private var depthTexture: MTLTexture? = nil
+    private(set) var colorTexture: MTLTexture? = nil
+    private(set) var depthTexture: MTLTexture? = nil
     
     private(set) var renderPassDescriptor: MTLRenderPassDescriptor?
 
@@ -54,13 +54,13 @@ class ColorDepthRenderTarget: RenderTarget {
         // Depth Texture
         
         let depthDescriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: colorFormat,
+            pixelFormat: depthFormat,
             width: width,
             height: height,
             mipmapped: false
         )
         depthDescriptor.usage = [.renderTarget]
-        depthDescriptor.storageMode = .private
+        depthDescriptor.storageMode = .memoryless
 
         self.depthTexture = device.makeTexture(descriptor: depthDescriptor)
         

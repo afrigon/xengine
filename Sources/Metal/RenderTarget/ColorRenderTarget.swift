@@ -2,7 +2,7 @@ import Metal
 import XEngineCore
 
 class ColorRenderTarget: RenderTarget {
-    private var colorTexture: MTLTexture? = nil
+    private(set) var colorTexture: MTLTexture? = nil
     
     private(set) var renderPassDescriptor: MTLRenderPassDescriptor?
 

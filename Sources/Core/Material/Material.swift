@@ -5,7 +5,7 @@ public enum Material {
     
     public func shader(type: RendererType = .basic) -> String {
         let name = switch self {
-            case .unlitColor(let unlitColorMaterial):
+            case .unlitColor:
                 "unlit_color"
         }
         

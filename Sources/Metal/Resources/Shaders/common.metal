@@ -1,3 +1,6 @@
+#ifndef COMMON_METAL
+#define COMMON_METAL
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -8,6 +11,11 @@ struct ResterizerData {
     half3 normal;
     half3 tangent;
     float2 uv0;
+};
+
+struct PostResterizerData {
+    float4 position [[position]];
+    float2 uv;
 };
 
 struct Globals {
@@ -23,3 +31,4 @@ struct Globals {
     float time;
     float deltaTime;
 };
+#endif

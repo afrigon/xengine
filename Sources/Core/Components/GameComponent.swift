@@ -1,5 +1,4 @@
-public protocol GameComponent: GameUpdatable {
+public protocol GameComponent: GameUpdatable, Toggleable {
     var parent: GameObject? { get set }
-    var enabled: Bool { get set }
     var name: String { get }
 }

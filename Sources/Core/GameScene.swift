@@ -20,6 +20,10 @@ public class GameScene {
         var results: [GameObject] = []
         
         for object in objects where object.enabled {
+            if object.getComponent(type) != nil {
+                results.append(object)
+            }
+            
             results.append(contentsOf: collectObjectsWithComponents(from: object.children, T.self))
         }
         
