@@ -1,4 +1,4 @@
-import Foundation
+import simd
 
 public class GameObject: GameUpdatable, Identifiable, Toggleable {
     public var name: String? = nil
@@ -27,7 +27,26 @@ public class GameObject: GameUpdatable, Identifiable, Toggleable {
         components.compactMap { $0 as? T }
     }
     
-    public func update(input: Input, delta: Double) {
+    func query(parentTransform: simd_float4x4, where predicate: (GameObject) -> Bool) -> [WorldObject<GameObject>] {
+        let transform = parentTransform * transform.matrix
+        
+        var results: [WorldObject<GameObject>] = []
+        
+        if predicate(self) {
+            results.append(.init(
+                transform: transform,
+                object: self
+            ))
+        }
+        
+        for child in children where child.enabled {
+            results.append(contentsOf: child.query(parentTransform: transform, where: predicate))
+        }
+
+        return results
+    }
+    
+    public func update(input: Input, delta: Float) {
         for component in components where component.enabled {
             component.update(input: input, delta: delta)
         }

@@ -5,8 +5,8 @@
 using namespace metal;
 
 fragment half4 fragment_post_identity(
-    PostResterizerData data         [[stage_in]],
-    texture2d<half> input           [[texture(0)]]
+    UnlitRasterizerData data  [[stage_in]],
+    texture2d<half> input     [[texture(0)]]
 ) {
     constexpr sampler linearSampler(
         address::repeat,

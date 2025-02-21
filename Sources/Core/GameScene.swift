@@ -1,3 +1,4 @@
+import simd
 import Metal
 
 public class GameScene {
@@ -6,25 +7,24 @@ public class GameScene {
     
     public init() { }
     
-    public func update(input: Input, delta: Double) {
+    public func update(input: Input, delta: Float) {
         for object in objects where object.enabled {
             object.update(input: input, delta: delta)
         }
     }
     
-    public func collectObjectsWithComponents<T: GameComponent>(_ type: T.Type) -> [GameObject] {
-        collectObjectsWithComponents(from: objects, T.self)
-    }
-    
-    private func collectObjectsWithComponents<T: GameComponent>(from objects: [GameObject], _ type: T.Type) -> [GameObject] {
-        var results: [GameObject] = []
+    public func query(where predicate: (GameObject) -> Bool) -> [WorldObject<GameObject>] {
+        var results: [WorldObject<GameObject>] = []
+        
+        let identity: simd_float4x4 = .init(rows: [
+            .init(1, 0, 0, 0),
+            .init(0, 1, 0, 0),
+            .init(0, 0, 1, 0),
+            .init(0, 0, 0, 1)
+        ])
         
         for object in objects where object.enabled {
-            if object.getComponent(type) != nil {
-                results.append(object)
-            }
-            
-            results.append(contentsOf: collectObjectsWithComponents(from: object.children, T.self))
+            results.append(contentsOf: object.query(parentTransform: identity, where: predicate))
         }
         
         return results

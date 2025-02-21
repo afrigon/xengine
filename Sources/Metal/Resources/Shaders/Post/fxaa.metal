@@ -11,9 +11,9 @@ struct FXAAOptions {
 };
 
 fragment half4 fragment_post_fxaa(
-    PostResterizerData data         [[stage_in]],
-    texture2d<half> input           [[texture(0)]],
-    constant FXAAOptions& options   [[buffer(1)]]
+    UnlitRasterizerData data       [[stage_in]],
+    texture2d<half> input          [[texture(0)]],
+    constant FXAAOptions& options  [[buffer(3)]]
 ) {
     constexpr sampler linearSampler(
         address::repeat,

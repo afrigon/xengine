@@ -6,13 +6,13 @@ public class Script: GameComponent {
         "Script"
     }
     
-    private var updateClosure: ((GameObject, Input, Double) -> Void)?
+    private var updateClosure: ((GameObject, Input, Float) -> Void)?
     
-    public init(updateClosure: ((GameObject, Input, Double) -> Void)? = nil) {
+    public init(updateClosure: ((GameObject, Input, Float) -> Void)? = nil) {
         self.updateClosure = updateClosure
     }
     
-    public func update(input: Input, delta: Double) {
+    public func update(input: Input, delta: Float) {
         guard let parent else {
             return
         }

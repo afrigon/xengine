@@ -4,7 +4,7 @@
 
 using namespace metal;
 
-vertex PostResterizerData vertex_post(uint id [[vertex_id]]) {
+vertex UnlitRasterizerData vertex_post(uint id [[vertex_id]]) {
     float2 quad[6] = {
         float2(-1.0,  1.0),  // Top-left
         float2( 1.0, -1.0),  // Bottom-right
@@ -23,7 +23,7 @@ vertex PostResterizerData vertex_post(uint id [[vertex_id]]) {
         float2(1.0, 1.0)   // Bottom-right
     };
 
-    PostResterizerData output;
+    UnlitRasterizerData output;
     
     output.position = float4(quad[id], 0.0, 1.0);
     output.uv = uv[id];

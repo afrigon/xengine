@@ -1,5 +1,3 @@
-import Foundation
-
 public class MeshRenderer: GameComponent {
     public weak var parent: GameObject?
     public var enabled: Bool = true
@@ -19,5 +17,5 @@ public class MeshRenderer: GameComponent {
         self.material = material
     }
     
-    public func update(input: Input, delta: Double) { }
+    public func update(input: Input, delta: Float) { }
 }

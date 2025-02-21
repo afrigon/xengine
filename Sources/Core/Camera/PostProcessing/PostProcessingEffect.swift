@@ -13,6 +13,24 @@ public enum PostProcessingEffect {
                 "fxaa"
         }
     }
+    
+    public var needsDepthTexture: Bool {
+        switch self {
+            default:
+                false
+        }
+    }
+        
+    public var needsNormalTexture: Bool {
+        false
+    }
+    
+    public var needsTime: Bool {
+        switch self {
+            default:
+                false
+        }
+    }
 }
 
 extension PostProcessingEffect {

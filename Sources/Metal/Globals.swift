@@ -18,6 +18,6 @@ struct Globals {
     var modelViewProjectionMatrix: matrix_float4x4 = .init()
 
     // time
-    var time: Double? = nil
-    var deltaTime: Double = 0
+    var time: Float? = nil
+    var deltaTime: Float = 0
 }

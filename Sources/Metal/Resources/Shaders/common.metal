@@ -1,19 +1,16 @@
 #ifndef COMMON_METAL
 #define COMMON_METAL
 
-#include <metal_stdlib>
 #include <simd/simd.h>
-
-using namespace metal;
 
 struct ResterizerData {
     float4 position [[position]];
-    half3 normal;
-    half3 tangent;
+    float3 normal;
+    float3 tangent;
     float2 uv0;
 };
 
-struct PostResterizerData {
+struct UnlitRasterizerData {
     float4 position [[position]];
     float2 uv;
 };

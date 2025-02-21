@@ -39,8 +39,8 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     }
     
     private func update() {
-        let lastTime = globals.time ?? CACurrentMediaTime()
-        let currentTime = CACurrentMediaTime()
+        let lastTime = globals.time ?? Float(CACurrentMediaTime())
+        let currentTime = Float(CACurrentMediaTime())
         let delta = currentTime - lastTime
         globals.time = currentTime
         globals.deltaTime = delta

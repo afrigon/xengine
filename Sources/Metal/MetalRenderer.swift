@@ -86,7 +86,12 @@ class MetalRenderer {
                 return
             }
             
-            let processed = drawPost(from: sceneTexture, effects: scene.camera.postProcessing.effects, commandBuffer: commandBuffer)
+            let processed = drawPost(
+                from: sceneTexture,
+                effects: scene.camera.postProcessing.effects,
+                deltaTime: globals.deltaTime,
+                commandBuffer: commandBuffer
+            )
             
             // this is where UI element would be rendered but it is not supported yet.
             // The intended way of doing UI is to layer SwiftUI on top of the MetalView.
@@ -112,23 +117,61 @@ class MetalRenderer {
         
         var globals = globals
         
-        let renderable = scene.collectObjectsWithComponents(MeshRenderer.self)
+        let lights = scene.query {
+            $0.getComponent(Light.self) != nil
+        }
+        
+        // TODO: filter lights based on distance / other euristics
+        
+        let directionalLights: [DirectionalLight] = lights.compactMap { (entry) -> DirectionalLight? in
+            guard let light = entry.object.getComponent(Light.self) else {
+                return nil
+            }
+            
+            guard case let .directional(options) = light.options else {
+                return nil
+            }
+            
+            return .init(
+                direction: simd_normalize(simd_float3(
+                    -entry.transform.columns.2.x,
+                    -entry.transform.columns.2.y,
+                    -entry.transform.columns.2.z
+                )),
+                color: options.color.rgb,
+                intensity: options.intensity
+            )
+        }
+        + [
+            .init(
+                direction: simd_float3(0, 1, 0),
+                color: simd_float3(1, 1, 1),
+                intensity: 0
+            )  // add a dummy light to prevent empty metal buffer
+        ]
+            
+        let renderable = scene.query {
+            $0.getComponent(MeshRenderer.self) != nil
+        }
+        
         // TODO: filter visible objects
         
-        let meshRenderers = renderable.compactMap { $0.getComponent(MeshRenderer.self) }
-        
-        let entries = meshRenderers
-            .map {
-                (
-                    transform: $0.parent?.transform ?? .init(),
-                    identifier: RenderableIdentifier(
-                        shader: repository.getShaderIdentifier(for: $0.material, type: .basic),
-                        material: $0.material,
-                        mesh: $0.mesh
+        let meshRenderable: [WorldObject<RenderableIdentifier>] = renderable
+            .compactMap { (entry) -> WorldObject<RenderableIdentifier>? in
+                guard let renderer = entry.object.getComponent(MeshRenderer.self) else {
+                    return nil
+                }
+                
+                return .init(
+                    transform: entry.transform,
+                    object: RenderableIdentifier(
+                        shader: repository.getShaderIdentifier(for: renderer.material, type: .basic),
+                        material: renderer.material,
+                        mesh: renderer.mesh
                     )
                 )
             }
-            .sorted(by: { $0.identifier < $1.identifier })
+            .sorted(by: { $0.object < $1.object })
         
         var lastShader: String? = nil
         var lastMaterial: String? = nil
@@ -138,56 +181,64 @@ class MetalRenderer {
         var material: Material? = nil
         var mesh: MetalMesh? = nil
 
-        for entry in entries {
-            if lastShader != entry.identifier.shader {
-                pipeline = repository.createOrGetShader(entry.identifier.shader) {
-                    self.createRenderPipelineState(entry.identifier.shader)
+        for entry in meshRenderable {
+            if lastShader != entry.object.shader {
+                pipeline = repository.createOrGetShader(entry.object.shader) {
+                    self.createRenderPipelineState(entry.object.shader)
                 }
                 
                 sceneEncoder.setRenderPipelineState(pipeline!)
 
-                lastShader = entry.identifier.shader
+                lastShader = entry.object.shader
             }
             
-            if lastMaterial != entry.identifier.material {
+            if lastMaterial != entry.object.material {
                 // do material loading stuff + texture
-                material = repository.materials[entry.identifier.material]
-                
+                material = repository.materials[entry.object.material]
+
                 if let material {
                     switch material {
                         case .unlitColor(let m):
                             sceneEncoder.setFragmentBytes([m.color], length: MemoryLayout.size(ofValue: m.color), index: 1)
+                        case .blinnPhong(let m):
+                            let data = BlinnPhongData(directionalLightCount: UInt32(directionalLights.count), albedoColor: m.color.rgb)
+                            sceneEncoder.setFragmentBytes([data], length: MemoryLayout.size(ofValue: data), index: 1)
+                            sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
                     }
                 }
                 
-                lastMaterial = entry.identifier.material
+                lastMaterial = entry.object.material
             }
             
-            if lastMesh != entry.identifier.mesh {
-                mesh = repository.meshes[entry.identifier.mesh]
+            if lastMesh != entry.object.mesh {
+                mesh = repository.meshes[entry.object.mesh]
                 
                 sceneEncoder.setVertexBuffer(mesh!.verticesBuffer, index: 1)
                 sceneEncoder.setVertexBuffer(mesh!.normalsBuffer, index: 2)
                 sceneEncoder.setVertexBuffer(mesh!.tangentsBuffer, index: 3)
                 sceneEncoder.setVertexBuffer(mesh!.uv0Buffer, index: 4)
 
-                lastMesh = entry.identifier.mesh
+                lastMesh = entry.object.mesh
             }
             
             if let mesh {
-                globals.modelMatrix = entry.transform.matrix
-                globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * entry.transform.matrix
-                globals.normalMatrix = entry.transform.matrix3x3
+                globals.modelMatrix = entry.transform
+                globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * entry.transform
+                globals.normalMatrix = simd_transpose(simd_inverse(simd_float3x3(columns: (
+                    simd_float3(entry.transform.columns.0.x, entry.transform.columns.1.x, entry.transform.columns.2.x),
+                    simd_float3(entry.transform.columns.0.y, entry.transform.columns.1.y, entry.transform.columns.2.y),
+                    simd_float3(entry.transform.columns.0.z, entry.transform.columns.1.z, entry.transform.columns.2.z)
+                ))))
                 
                 sceneEncoder.setVertexBytes(
                     [globals],
-                    length: MemoryLayout.size(ofValue: globals),
+                    length: MemoryLayout<Globals>.stride,
                     index: 0
                 )
                 
                 sceneEncoder.setFragmentBytes(
                     [globals],
-                    length: MemoryLayout.size(ofValue: globals),
+                    length: MemoryLayout<Globals>.stride,
                     index: 0
                 )
 
@@ -206,7 +257,7 @@ class MetalRenderer {
         return sceneRenderTarget.colorTexture
     }
     
-    private func drawPost(from input: MTLTexture, effects: [PostProcessingEffect], commandBuffer: MTLCommandBuffer) -> MTLTexture {
+    private func drawPost(from input: MTLTexture, effects: [PostProcessingEffect], deltaTime: Float, commandBuffer: MTLCommandBuffer) -> MTLTexture {
         var output: MTLTexture = input
         var usingA: Bool = true
         
@@ -225,7 +276,8 @@ class MetalRenderer {
                 from: output,
                 to: target,
                 effect: effect,
-                postEncoder: encoder
+                postEncoder: encoder,
+                deltaTime: deltaTime
             )
             
             usingA = !usingA
@@ -239,7 +291,8 @@ class MetalRenderer {
         from input: MTLTexture,
         to output: MTLTexture,
         effect: PostProcessingEffect,
-        postEncoder: MTLRenderCommandEncoder
+        postEncoder: MTLRenderCommandEncoder,
+        deltaTime: Float
     ) {
         let pipeline = repository.createOrGetShader(effect.shader) {
             self.createPostRenderPipelineState(effect.shader)
@@ -249,9 +302,17 @@ class MetalRenderer {
         
         postEncoder.setFragmentTexture(input, index: 0)
         
+        if effect.needsDepthTexture {
+            postEncoder.setFragmentTexture(sceneRenderTarget.depthTexture, index: 1)
+        }
+        
+        if effect.needsTime {
+            postEncoder.setFragmentBytes([deltaTime], length: MemoryLayout.size(ofValue: deltaTime), index: 2)
+        }
+
         switch effect {
             case .fxaa(let options):
-                postEncoder.setFragmentBytes([options], length: MemoryLayout.size(ofValue: options), index: 1)
+                postEncoder.setFragmentBytes([options], length: MemoryLayout.size(ofValue: options), index: 3)
             default:
                 break
         }
