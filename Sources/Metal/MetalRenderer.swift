@@ -111,8 +111,6 @@ class MetalRenderer {
         sceneEncoder.label = "Scene Encoder"
 
         sceneEncoder.setDepthStencilState(depthStencilState)
-        sceneEncoder.setCullMode(.back)
-        sceneEncoder.setFrontFacing(.clockwise)
         sceneEncoder.setTriangleFillMode(scene.camera.wireframe ? .lines : .fill)
         
         var globals = globals
@@ -197,7 +195,11 @@ class MetalRenderer {
                 material = repository.materials[entry.object.material]
 
                 if let material {
-                    switch material {
+                    sceneEncoder.setCullMode(material.commonOptions.cullingMode.metal)
+                    sceneEncoder.setFrontFacing(material.commonOptions.frontFacing.metal)
+                    sceneEncoder.setDepthBias(material.commonOptions.depthBias ? 0.001 : 0, slopeScale: 1, clamp: 0)
+
+                    switch material.options {
                         case .unlitColor(let m):
                             sceneEncoder.setFragmentBytes([m.color], length: MemoryLayout.size(ofValue: m.color), index: 1)
                         case .blinnPhong(let m):
@@ -213,12 +215,14 @@ class MetalRenderer {
             if lastMesh != entry.object.mesh {
                 mesh = repository.meshes[entry.object.mesh]
                 
-                sceneEncoder.setVertexBuffer(mesh!.verticesBuffer, index: 1)
-                sceneEncoder.setVertexBuffer(mesh!.normalsBuffer, index: 2)
-                sceneEncoder.setVertexBuffer(mesh!.tangentsBuffer, index: 3)
-                sceneEncoder.setVertexBuffer(mesh!.uv0Buffer, index: 4)
+                if let mesh {
+                    sceneEncoder.setVertexBuffer(mesh.verticesBuffer, index: 1)
+                    sceneEncoder.setVertexBuffer(mesh.normalsBuffer, index: 2)
+                    sceneEncoder.setVertexBuffer(mesh.tangentsBuffer, index: 3)
+                    sceneEncoder.setVertexBuffer(mesh.uv0Buffer, index: 4)
 
-                lastMesh = entry.object.mesh
+                    lastMesh = entry.object.mesh
+                }
             }
             
             if let mesh {

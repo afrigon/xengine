@@ -8,8 +8,8 @@ vertex UnlitRasterizerData vertex_unlit_color(
     uint id                         [[vertex_id]],
     constant Globals& globals       [[buffer(0)]],
     const device float3* positions  [[buffer(1)]],
-    const device float3* normals     [[buffer(2)]],
-    const device float3* tangents    [[buffer(3)]],
+    const device float3* normals    [[buffer(2)]],
+    const device float3* tangents   [[buffer(3)]],
     const device float2* uv0        [[buffer(4)]]
 ) {
     UnlitRasterizerData output;

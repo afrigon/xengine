@@ -1,4 +1,4 @@
-public struct UnlitColorMaterial {
+public struct BlinnPhongMaterialOptions {
     public let color: Color
     
     public init(_ color: Color) {

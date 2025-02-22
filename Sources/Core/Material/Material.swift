@@ -1,17 +1,11 @@
 import Foundation
 
-public enum Material {
-    case unlitColor(UnlitColorMaterial)
-    case blinnPhong(BlinnPhongMaterial)
+public struct Material {
+    public var commonOptions: MaterialCommonOptions
+    public var options: MaterialOptions
     
-    public func shader(type: RendererType = .basic) -> String {
-        let name = switch self {
-            case .unlitColor:
-                "unlit_color"
-            case .blinnPhong:
-                "blinn_phong"
-        }
-        
-        return "\(name)\(type.rawValue)"
+    public init(_ options: MaterialOptions, common: MaterialCommonOptions = .init()) {
+        self.options = options
+        self.commonOptions = common
     }
 }

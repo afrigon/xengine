@@ -22,6 +22,10 @@ public class MetalMesh {
         // this doesnt work with a list of UInt16 indices.
         indicesCount = indicesSize / 4
         
+        guard verticesSize != 0 && indicesSize != 0 && normalsSize != 0 && tangentsSize != 0 && uv0Size != 0 else {
+            return nil
+        }
+        
         // TODO: fix whatever happens when a buffer does not exists aka colors and uvs
         guard let verticesBuffer = device?.makeBuffer(length: verticesSize),
               let indicesBuffer = device?.makeBuffer(length: indicesSize),

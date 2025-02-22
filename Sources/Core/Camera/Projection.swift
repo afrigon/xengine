@@ -4,7 +4,7 @@ public enum Projection {
     case perspective(
         fov: Angle = .degrees(90),
         aspect: Float = 1,
-        near: Float = 0.2,
+        near: Float = 0.05,
         far: Float = 1000,
         handedness: Handedness = .leftHand
     )
@@ -26,12 +26,12 @@ public enum Projection {
                             .init( 0,  0,  1,          0)
                         ])
                     case .rightHand:
-                        let zs = far / (near - far)
+                        let zs = (far + near) / (near - far)
                         
                         return simd_float4x4(rows: [
                             .init(xs,  0,  0,         0),
                             .init( 0, ys,  0,         0),
-                            .init( 0,  0, zs, near * zs),
+                            .init( 0,  0, zs, near * zs), // TODO: chatgipiti told me to double check this
                             .init( 0,  0, -1,         0)
                         ])
                 }
