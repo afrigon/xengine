@@ -163,6 +163,7 @@ class MetalRenderer {
                 return .init(
                     transform: entry.transform,
                     object: RenderableIdentifier(
+                        renderingMode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
                         shader: repository.getShaderIdentifier(for: renderer.material, type: .basic),
                         material: renderer.material,
                         mesh: renderer.mesh
@@ -206,9 +207,10 @@ class MetalRenderer {
                             let data = BlinnPhongData(
                                 directionalLightCount: UInt32(directionalLights.count),
                                 useAlbedoTexture: m.useAlbedoTexture,
-                                albedoColor: m.albedoColor.rgb
+                                albedoColor: m.albedoColor.rgb,
+                                alphaCutoff: material.commonOptions.renderingMode.alphaCutoff
                             )
-                            sceneEncoder.setFragmentBytes([data], length: MemoryLayout.size(ofValue: data), index: 1)
+                            sceneEncoder.setFragmentBytes([data], length: MemoryLayout<BlinnPhongData>.stride, index: 1)
                             sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
                             
                             if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {

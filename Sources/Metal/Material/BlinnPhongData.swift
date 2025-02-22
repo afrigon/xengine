@@ -6,4 +6,6 @@ struct BlinnPhongData {
     
     let useAlbedoTexture: Bool
     let albedoColor: simd_float3
+    
+    let alphaCutoff: Float
 };
