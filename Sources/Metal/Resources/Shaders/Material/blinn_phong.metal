@@ -7,6 +7,7 @@ using namespace metal;
 
 struct BlinnPhongData {
     uint directional_light_count;
+    bool use_albedo_texture;
     float3 albedo_color;
 };
 
@@ -32,8 +33,15 @@ fragment float4 fragment_blinn_phong(
     ResterizerData input                           [[stage_in]],
     constant Globals& globals                      [[buffer(0)]],
     constant BlinnPhongData& material_data         [[buffer(1)]],
-    constant DirectionalLight* directional_lights  [[buffer(2)]]
+    constant DirectionalLight* directional_lights  [[buffer(2)]],
+    texture2d<half> albedo                         [[texture(3)]]
 ) {
+    constexpr sampler linearSampler(
+        address::repeat,
+        mag_filter::linear,
+        min_filter::linear
+    );
+    
     float3 diffuse = float3(0.0);
     
     for (uint i = 0; i < material_data.directional_light_count; i++) {
@@ -44,5 +52,6 @@ fragment float4 fragment_blinn_phong(
     }
     
     float3 ambient = float3(0.1);
-    return float4(material_data.albedo_color * (diffuse + ambient), 1.0);
+    float3 albedo_output = material_data.use_albedo_texture ? float3(albedo.sample(linearSampler, input.uv0).rgb) : material_data.albedo_color;
+    return float4(albedo_output * (diffuse + ambient), 1.0);
 }

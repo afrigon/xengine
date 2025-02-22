@@ -203,9 +203,17 @@ class MetalRenderer {
                         case .unlitColor(let m):
                             sceneEncoder.setFragmentBytes([m.color], length: MemoryLayout.size(ofValue: m.color), index: 1)
                         case .blinnPhong(let m):
-                            let data = BlinnPhongData(directionalLightCount: UInt32(directionalLights.count), albedoColor: m.color.rgb)
+                            let data = BlinnPhongData(
+                                directionalLightCount: UInt32(directionalLights.count),
+                                useAlbedoTexture: m.useAlbedoTexture,
+                                albedoColor: m.albedoColor.rgb
+                            )
                             sceneEncoder.setFragmentBytes([data], length: MemoryLayout.size(ofValue: data), index: 1)
                             sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
+                            
+                            if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {
+                                sceneEncoder.setFragmentTexture(albedo, index: 3)
+                            }
                     }
                 }
                 

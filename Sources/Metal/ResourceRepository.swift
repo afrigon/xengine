@@ -1,15 +1,19 @@
-import Metal
+import MetalKit
 import XEngineCore
 
 public class ResourceRepository {
     var shaders: [String: MTLRenderPipelineState] = [:]
     var materials: [String: Material] = [:]
     var meshes: [String: MetalMesh] = [:]
+    var textures: [String: MTLTexture] = [:]
     
+    let textureLoader: MTKTextureLoader
+
     weak var device: MTLDevice?
     
     init(device: MTLDevice) {
         self.device = device
+        self.textureLoader = MTKTextureLoader(device: device)
     }
 
     public func registerMesh(_ name: String, mesh: Mesh) {
@@ -18,6 +22,18 @@ public class ResourceRepository {
         }
         
         meshes[name] = MetalMesh(device: device, mesh: mesh)
+    }
+    
+    public func registerTexture(_ name: String, url: URL) {
+        guard let device = device else {
+            return
+        }
+        
+        guard let texture = try? textureLoader.newTexture(URL: url, options: nil) else {
+            return
+        }
+        
+        textures[name] = texture
     }
 
     public func registerMaterial(_ name: String, material: Material) {

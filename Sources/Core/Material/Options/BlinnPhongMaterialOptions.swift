@@ -1,7 +1,16 @@
 public struct BlinnPhongMaterialOptions {
-    public let color: Color
+    public let albedoColor: Color
+    public let albedo: String?
     
-    public init(_ color: Color) {
-        self.color = color
+    public var useAlbedoTexture: Bool {
+        albedo != nil
+    }
+
+    public init(
+        albedoColor: Color,
+        albedo: String? = nil
+    ) {
+        self.albedoColor = albedoColor
+        self.albedo = albedo
     }
 }
