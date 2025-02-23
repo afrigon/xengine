@@ -9,7 +9,7 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     private var globals: Globals = .init()
     private var scene: GameScene
     
-    public var resourceRepository: ResourceRepository {
+    public var resourceRepository: MetalResourceRepository {
         renderer.repository
     }
 
@@ -23,6 +23,7 @@ public class MetalDriver: NSObject, MTKViewDelegate {
         self.renderer = renderer
     }
     
+    @MainActor
     func setup(_ view: MTKView) {
         view.delegate = self
         

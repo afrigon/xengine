@@ -1,7 +1,7 @@
 import MetalKit
 import XEngineCore
 
-public class ResourceRepository {
+public class MetalResourceRepository: ResourceRepository {
     var shaders: [String: MTLRenderPipelineState] = [:]
     var materials: [String: Material] = [:]
     var meshes: [String: MetalMesh] = [:]
@@ -14,6 +14,18 @@ public class ResourceRepository {
     init(device: MTLDevice) {
         self.device = device
         self.textureLoader = MTKTextureLoader(device: device)
+    }
+    
+    public func meshExists(name: String) -> Bool {
+        meshes[name] != nil
+    }
+    
+    public func materialExists(name: String) -> Bool {
+        materials[name] != nil
+    }
+
+    public func textureExists(name: String) -> Bool {
+        textures[name] != nil
     }
 
     public func registerMesh(_ name: String, mesh: Mesh) {

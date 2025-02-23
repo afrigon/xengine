@@ -2,7 +2,7 @@ import XEngineCore
 import MetalKit
 
 class MetalRenderer {
-    private(set) var repository: ResourceRepository
+    private(set) var repository: MetalResourceRepository
     
     private let colorPixelFormat: MTLPixelFormat = .bgra8Unorm_srgb
     private let depthStencilPixelFormat: MTLPixelFormat = .depth32Float_stencil8
@@ -47,6 +47,7 @@ class MetalRenderer {
         self.outputRenderTarget = ScreenColorRenderTarget(colorFormat: colorPixelFormat)
     }
     
+    @MainActor
     func setup(with view: MTKView) {
         view.device = device
         view.colorPixelFormat = colorPixelFormat
@@ -70,6 +71,7 @@ class MetalRenderer {
         outputRenderTarget.resize(width: Int(width), height: Int(height), device: device)
     }
     
+    @MainActor
     func draw(scene: GameScene, globals: Globals, in view: MTKView) {
         // resources management load / clean
         // ideas: ref count + periodic purge if above memory quota
@@ -96,6 +98,7 @@ class MetalRenderer {
             // this is where UI element would be rendered but it is not supported yet.
             // The intended way of doing UI is to layer SwiftUI on top of the MetalView.
             
+            // TODO: instead of drawing an identity post processing to the final display. the last layer of post processing should be drawn to the screen.
             drawOutput(from: processed, to: drawable.texture, commandBuffer: commandBuffer)
         }
     }
@@ -238,11 +241,7 @@ class MetalRenderer {
             if let mesh {
                 globals.modelMatrix = entry.transform
                 globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * entry.transform
-                globals.normalMatrix = simd_transpose(simd_inverse(simd_float3x3(columns: (
-                    simd_float3(entry.transform.columns.0.x, entry.transform.columns.1.x, entry.transform.columns.2.x),
-                    simd_float3(entry.transform.columns.0.y, entry.transform.columns.1.y, entry.transform.columns.2.y),
-                    simd_float3(entry.transform.columns.0.z, entry.transform.columns.1.z, entry.transform.columns.2.z)
-                ))))
+                globals.normalMatrix = simd_transpose(simd_inverse(entry.transform.matrix3x3))
                 
                 sceneEncoder.setVertexBytes(
                     [globals],

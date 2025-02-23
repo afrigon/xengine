@@ -5,13 +5,13 @@ public class GameObject: GameUpdatable, Identifiable, Toggleable {
     public var enabled: Bool = true
 
     public var transform: Transform
-    private var components: [any GameComponent] = .init()
+    var components: [any GameComponent] = .init()
     
-    public var children: [GameObject]
+    public var children: [GameObject] = []
     
-    public init(transform: Transform = .init(), children: [GameObject] = []) {
+    public init(name: String? = nil, transform: Transform = .init()) {
+        self.name = name
         self.transform = transform
-        self.children = children
     }
     
     public func addComponent<T: GameComponent>(component: consuming T) {

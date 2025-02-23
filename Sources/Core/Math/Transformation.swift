@@ -21,12 +21,7 @@ public struct Transformation {
     }
     
     public static func translate(_ t: SIMD3<Float>) -> simd_float4x4 {
-        simd_float4x4(rows: [
-            .init(1, 0, 0, t.x),
-            .init(0, 1, 0, t.y),
-            .init(0, 0, 1, t.z),
-            .init(0, 0, 0,   1)
-        ])
+        Transformation.translate(t.x, t.y, t.z)
     }
     
     public static func scale(_ x: Float, _ y: Float, _ z: Float) -> simd_float4x4 {
@@ -39,12 +34,7 @@ public struct Transformation {
     }
     
     public static func scale(_ s: SIMD3<Float>) -> simd_float4x4 {
-        simd_float4x4(rows: [
-            .init(s.x,   0,   0, 0),
-            .init(  0, s.y,   0, 0),
-            .init(  0,   0, s.z, 0),
-            .init(  0,   0,   0, 1)
-        ])
+        Transformation.scale(s.x, s.y, s.z)
     }
     
     /// - Parameter x: pitch angle in degrees
