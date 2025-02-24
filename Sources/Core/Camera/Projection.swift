@@ -2,7 +2,7 @@ import simd
 
 public enum Projection {
     case perspective(
-        fov: Angle = .degrees(120),
+        fov: Angle = .degrees(80),
         aspect: Float = 1,
         near: Float = 0.05,
         far: Float = 1000,

@@ -8,7 +8,8 @@ public class MetalMesh {
     public let normalsBuffer: MTLBuffer
     public let tangentsBuffer: MTLBuffer
     public let uv0Buffer: MTLBuffer
-    
+    public let boneIndicesBuffer: MTLBuffer?
+
     public let indicesCount: Int
     
     public init?(device: MTLDevice?, mesh: Mesh) {
@@ -81,5 +82,19 @@ public class MetalMesh {
         self.normalsBuffer = normalsBuffer
         self.tangentsBuffer = tangentsBuffer
         self.uv0Buffer = uv0Buffer
+        
+        if let boneIndices = mesh.boneIndices, boneIndices.count != 0, let buffer = device?.makeBuffer(length: boneIndices.count) {
+            boneIndices.withUnsafeBytes { dataPointer in
+                guard let from = dataPointer.baseAddress else {
+                    return
+                }
+                
+                buffer.contents().copyMemory(from: from, byteCount: boneIndices.count)
+            }
+            
+            self.boneIndicesBuffer = buffer
+        } else {
+            self.boneIndicesBuffer = nil
+        }
     }
 }

@@ -40,7 +40,7 @@ public class GameScene {
             let name = object.name ?? "Unnamed Object"
             let components = object.components.map { $0.name }.joined(separator: ", ")
             
-            print("\(String(repeating: " └─ ", count: indent))[\(object.enabled ? "X" : " ")] \(name) <\(components)>")
+            print("\(String(repeating: "    ", count: max(0, indent - 1)))\(indent != 0 ? " └─ " : "")[\(object.enabled ? "X" : " ")] \(name) <\(components)>")
             
             _debug(objects: object.children, indent: indent + 1)
         }

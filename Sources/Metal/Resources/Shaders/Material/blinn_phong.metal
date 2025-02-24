@@ -12,26 +12,8 @@ struct BlinnPhongData {
     float alpha_cutoff;
 };
 
-vertex ResterizerData vertex_blinn_phong(
-    uint id                         [[vertex_id]],
-    constant Globals& globals       [[buffer(0)]],
-    const device float3* positions  [[buffer(1)]],
-    const device float3* normals    [[buffer(2)]],
-    const device float3* tangents   [[buffer(3)]],
-    const device float2* uv0        [[buffer(4)]]
-) {
-    ResterizerData output;
-
-    output.position = globals.modelViewProjectionMatrix * float4(positions[id], 1.0);
-    output.normal = normalize(globals.normalMatrix * normals[id]);
-    output.tangent = normalize(globals.normalMatrix * tangents[id]);
-    output.uv0 = uv0[id];
-    
-    return output;
-}
-
 fragment float4 fragment_blinn_phong(
-    ResterizerData input                           [[stage_in]],
+    RasterizerData input                           [[stage_in]],
     constant Globals& globals                      [[buffer(0)]],
     constant BlinnPhongData& material_data         [[buffer(1)]],
     constant DirectionalLight* directional_lights  [[buffer(2)]],

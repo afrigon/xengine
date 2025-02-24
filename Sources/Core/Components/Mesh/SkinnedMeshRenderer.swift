@@ -7,14 +7,18 @@ public class SkinnedMeshRenderer: GameComponent {
     }
     
     public let mesh: String
-    public let material: String
+    public var material: String
     
+    weak public var rootBone: Bone?
+
     public init(
         mesh: String,
-        material: String
+        material: String,
+        rootBone: Bone
     ) {
         self.mesh = mesh
         self.material = material
+        self.rootBone = rootBone
     }
     
     public func update(input: Input, delta: Float) { }

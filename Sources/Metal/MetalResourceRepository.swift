@@ -52,8 +52,8 @@ public class MetalResourceRepository: ResourceRepository {
         materials[name] = material
     }
 
-    func getShaderIdentifier(for material: String, type: RendererType) -> String {
-        materials[material]?.options.shader(type: type) ?? "unknown"
+    func getShaderIdentifier(for material: String) -> String {
+        materials[material]?.options.shader ?? "unknown"
     }
 
     func createOrGetShader(_ identifier: String, _ generator: @escaping () -> MTLRenderPipelineState) -> MTLRenderPipelineState {

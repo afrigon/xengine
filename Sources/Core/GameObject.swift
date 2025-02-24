@@ -3,15 +3,21 @@ import simd
 public class GameObject: GameUpdatable, Identifiable, Toggleable {
     public var name: String? = nil
     public var enabled: Bool = true
-
+    
     public var transform: Transform
     var components: [any GameComponent] = .init()
     
-    public var children: [GameObject] = []
+    private(set) public weak var parent: GameObject? = nil
+    private(set) public var children: [GameObject] = []
     
     public init(name: String? = nil, transform: Transform = .init()) {
         self.name = name
         self.transform = transform
+    }
+    
+    public func addChild(_ child: consuming GameObject) {
+        child.parent = self
+        self.children.append(child)
     }
     
     public func addComponent<T: GameComponent>(component: consuming T) {
@@ -27,7 +33,7 @@ public class GameObject: GameUpdatable, Identifiable, Toggleable {
         components.compactMap { $0 as? T }
     }
     
-    func query(parentTransform: simd_float4x4, where predicate: (GameObject) -> Bool) -> [WorldObject<GameObject>] {
+    public func query(parentTransform: simd_float4x4, where predicate: (GameObject) -> Bool) -> [WorldObject<GameObject>] {
         let transform = parentTransform * transform.matrix
         
         var results: [WorldObject<GameObject>] = []

@@ -9,6 +9,8 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     private var globals: Globals = .init()
     private var scene: GameScene
     
+    public var debug: DebugOptions = .init()
+    
     public var resourceRepository: MetalResourceRepository {
         renderer.repository
     }
@@ -34,7 +36,7 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     private func resize(width: UInt32, height: UInt32) {
         globals.width = width
         globals.height = height
-        scene.camera.set(projection: .perspective(aspect: Float(width) / Float(height)))
+        scene.camera.projection = .perspective(aspect: Float(width) / Float(height))
 
         renderer.resize(width: width, height: height)
     }
@@ -56,7 +58,12 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     
     public func draw(in view: MTKView) {
         update()
+        
+        #if DEBUG
+        renderer.draw(scene: scene, globals: globals, in: view, debug: debug)
+        #else
         renderer.draw(scene: scene, globals: globals, in: view)
+        #endif
     }
     
     public func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

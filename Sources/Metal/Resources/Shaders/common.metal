@@ -3,7 +3,7 @@
 
 #include <simd/simd.h>
 
-struct ResterizerData {
+struct RasterizerData {
     float4 position [[position]];
     float3 normal;
     float3 tangent;

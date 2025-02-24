@@ -7,7 +7,7 @@ public class MeshRenderer: GameComponent {
     }
     
     public let mesh: String
-    public let material: String
+    public var material: String
     
     public init(
         mesh: String,

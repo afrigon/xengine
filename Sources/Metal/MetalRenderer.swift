@@ -72,7 +72,7 @@ class MetalRenderer {
     }
     
     @MainActor
-    func draw(scene: GameScene, globals: Globals, in view: MTKView) {
+    func draw(scene: GameScene, globals: Globals, in view: MTKView, debug: DebugOptions) {
         // resources management load / clean
         // ideas: ref count + periodic purge if above memory quota
         // for the pokemon project all asset should fit into ram without any problem
@@ -84,7 +84,7 @@ class MetalRenderer {
         }
         
         drawFrame(on: drawable) { commandBuffer in
-            guard let sceneTexture = drawScene(scene: scene, globals: globals, commandBuffer: commandBuffer) else {
+            guard let sceneTexture = drawScene(scene: scene, globals: globals, debug: debug, commandBuffer: commandBuffer) else {
                 return
             }
             
@@ -103,7 +103,7 @@ class MetalRenderer {
         }
     }
     
-    private func drawScene(scene: GameScene, globals: Globals, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func drawScene(scene: GameScene, globals: Globals, debug: DebugOptions, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
         sceneRenderTarget.setClearColor(scene.camera.clear)
         
         guard let descriptor = sceneRenderTarget.renderPassDescriptor,
@@ -114,12 +114,16 @@ class MetalRenderer {
         sceneEncoder.label = "Scene Encoder"
 
         sceneEncoder.setDepthStencilState(depthStencilState)
-        sceneEncoder.setTriangleFillMode(scene.camera.wireframe ? .lines : .fill)
+        sceneEncoder.setTriangleFillMode(debug.wireframe ? .lines : .fill)
         
         var globals = globals
         
         let lights = scene.query {
-            $0.getComponent(Light.self) != nil
+            if let light = $0.getComponent(Light.self) {
+                return light.enabled
+            }
+            
+            return false
         }
         
         // TODO: filter lights based on distance / other euristics
@@ -152,28 +156,54 @@ class MetalRenderer {
         ]
             
         let renderable = scene.query {
-            $0.getComponent(MeshRenderer.self) != nil
+            if let renderer = $0.getComponent(MeshRenderer.self) {
+                return renderer.enabled
+            }
+            
+            if let renderer = $0.getComponent(SkinnedMeshRenderer.self) {
+                return renderer.enabled
+            }
+
+            return false
         }
         
         // TODO: filter visible objects
         
-        let meshRenderable: [WorldObject<RenderableIdentifier>] = renderable
-            .compactMap { (entry) -> WorldObject<RenderableIdentifier>? in
-                guard let renderer = entry.object.getComponent(MeshRenderer.self) else {
-                    return nil
-                }
-                
-                return .init(
-                    transform: entry.transform,
-                    object: RenderableIdentifier(
-                        renderingMode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
-                        shader: repository.getShaderIdentifier(for: renderer.material, type: .basic),
-                        material: renderer.material,
-                        mesh: renderer.mesh
-                    )
-                )
+        var jobs: [WorldObject<RenderJob>] = renderable
+            .flatMap { (entry) -> [WorldObject<RenderJob>] in
+                entry.object.getComponents(MeshRenderer.self)
+                    .map { renderer in
+                        WorldObject<RenderJob>(
+                            transform: entry.transform,
+                            object: .basic(
+                                mode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
+                                shader: repository.getShaderIdentifier(for: renderer.material),
+                                renderer: renderer
+                            )
+                        )
+                    }
             }
-            .sorted(by: { $0.object < $1.object })
+        
+        let skinnedJobs = renderable
+            .flatMap { (entry) -> [WorldObject<RenderJob>] in
+                entry.object.getComponents(SkinnedMeshRenderer.self)
+                    .map { renderer in
+                        WorldObject<RenderJob>(
+                            transform: entry.transform,
+                            object: .skinned(
+                                mode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
+                                shader: repository.getShaderIdentifier(for: renderer.material),
+                                renderer: renderer
+                            )
+                        )
+                    }
+            }
+
+        jobs.append(contentsOf: skinnedJobs)
+        
+        jobs = jobs.sorted(by: { (lhs: WorldObject<RenderJob>, rhs: WorldObject<RenderJob>) -> Bool in
+            lhs.object < rhs.object
+        })
         
         var lastShader: String? = nil
         var lastMaterial: String? = nil
@@ -183,20 +213,24 @@ class MetalRenderer {
         var material: Material? = nil
         var mesh: MetalMesh? = nil
 
-        for entry in meshRenderable {
-            if lastShader != entry.object.shader {
-                pipeline = repository.createOrGetShader(entry.object.shader) {
-                    self.createRenderPipelineState(entry.object.shader)
+        for job in jobs {
+            let currentMaterial = debug.materialOverride ?? job.object.material
+            let currentShader = debug.materialOverride.map {
+                repository.getShaderIdentifier(for: $0)
+            } ?? job.object.shader
+            
+            if lastShader != currentShader {
+                pipeline = repository.createOrGetShader(currentShader) {
+                    self.createRenderPipelineState(currentShader, type: job.object.type)
                 }
                 
                 sceneEncoder.setRenderPipelineState(pipeline!)
-
-                lastShader = entry.object.shader
+                
+                lastShader = currentShader
             }
             
-            if lastMaterial != entry.object.material {
-                // do material loading stuff + texture
-                material = repository.materials[entry.object.material]
+            if lastMaterial != currentMaterial {
+                material = repository.materials[currentMaterial]
 
                 if let material {
                     sceneEncoder.setCullMode(material.commonOptions.cullingMode.metal)
@@ -219,29 +253,39 @@ class MetalRenderer {
                             if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {
                                 sceneEncoder.setFragmentTexture(albedo, index: 3)
                             }
+                        case .normals:
+                            break
                     }
                 }
                 
-                lastMaterial = entry.object.material
+                lastMaterial = currentMaterial
             }
             
-            if lastMesh != entry.object.mesh {
-                mesh = repository.meshes[entry.object.mesh]
+            if lastMesh != job.object.mesh {
+                mesh = repository.meshes[job.object.mesh]
                 
                 if let mesh {
                     sceneEncoder.setVertexBuffer(mesh.verticesBuffer, index: 1)
                     sceneEncoder.setVertexBuffer(mesh.normalsBuffer, index: 2)
                     sceneEncoder.setVertexBuffer(mesh.tangentsBuffer, index: 3)
                     sceneEncoder.setVertexBuffer(mesh.uv0Buffer, index: 4)
-
-                    lastMesh = entry.object.mesh
+                    
+                    if case .skinned(_, _, let renderer) = job.object {
+                        guard let boneIndices = mesh.boneIndicesBuffer else {
+                            continue
+                        }
+                        
+                        sceneEncoder.setVertexBuffer(boneIndices, index: 5)
+                    }
+                    
+                    lastMesh = job.object.mesh
                 }
             }
             
             if let mesh {
-                globals.modelMatrix = entry.transform
-                globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * entry.transform
-                globals.normalMatrix = simd_transpose(simd_inverse(entry.transform.matrix3x3))
+                globals.modelMatrix = job.transform
+                globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * job.transform
+                globals.normalMatrix = simd_transpose(simd_inverse(job.transform.matrix3x3))
                 
                 sceneEncoder.setVertexBytes(
                     [globals],
@@ -254,6 +298,36 @@ class MetalRenderer {
                     length: MemoryLayout<Globals>.stride,
                     index: 0
                 )
+                
+                if case .skinned(_, _, let renderer) = job.object {
+                    guard let root = renderer.rootBone?.parent else {
+                        continue
+                    }
+                    
+                    let bones = root
+                        .query(parentTransform: .init(diagonal: .init(repeating: 1))) {
+                            if let bone = $0.getComponent(Bone.self) {
+                                return bone.enabled
+                            }
+                            
+                            return false
+                        }
+                        .compactMap { (entry) -> simd_float4x4? in
+                            guard let bone = entry.object.getComponent(Bone.self) else {
+                                return nil
+                            }
+                            
+                            return bone.animationTransform.matrix
+                        }
+                    
+                    guard let boneBuffer = device.makeBuffer(length: MemoryLayout<simd_float4x4>.stride * bones.count) else {
+                        return nil
+                    }
+                    
+                    boneBuffer.contents().copyMemory(from: bones, byteCount: MemoryLayout<simd_float4x4>.stride * bones.count)
+                    
+                    sceneEncoder.setVertexBuffer(boneBuffer, index: 6)
+                }
 
                 sceneEncoder.drawIndexedPrimitives(
                     type: .triangle,
@@ -367,11 +441,11 @@ class MetalRenderer {
         commandBuffer.commit()
     }
     
-    private func createRenderPipelineState(_ shader: String) -> MTLRenderPipelineState {
+    private func createRenderPipelineState(_ shader: String, type: String) -> MTLRenderPipelineState {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.label = "\(shader) Render Pipeline"
         
-        descriptor.vertexFunction = library.makeFunction(name: "vertex_\(shader)")
+        descriptor.vertexFunction = library.makeFunction(name: "vertex_\(type)")
         descriptor.fragmentFunction = library.makeFunction(name: "fragment_\(shader)")
 
         descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
@@ -389,7 +463,7 @@ class MetalRenderer {
         let descriptor = MTLRenderPipelineDescriptor()
         descriptor.label = "Post Processing (\(shader)) Render Pipeline"
         
-        descriptor.vertexFunction = library.makeFunction(name: "vertex_post")
+        descriptor.vertexFunction = library.makeFunction(name: "vertex_quad")
         descriptor.fragmentFunction = library.makeFunction(name: "fragment_post_\(shader)")
 
         descriptor.colorAttachments[0].pixelFormat = colorPixelFormat

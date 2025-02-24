@@ -56,7 +56,11 @@ public struct Transformation {
         ])
     }
     
-    public static func rotate(_ r: SIMD3<Float>) -> simd_float4x4 {
+    public static func rotate(_ r: simd_float3) -> simd_float4x4 {
         Transformation.rotate(r.x, r.y, r.z)
+    }
+    
+    public static func rotate(_ r: simd_quatf) -> simd_float4x4 {
+        .init(r)  // TODO: double check that this does what I think it does
     }
 }
