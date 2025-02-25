@@ -14,5 +14,13 @@ public class Animator: GameComponent {
     
     public func update(input: Input, delta: Float) {
         controller.update(delta: delta)
+        
+        guard let parent else {
+            return
+        }
+        
+        let bones = parent.query(component: Bone.self)
+        
+        // update all bones
     }
 }

@@ -1,54 +1,27 @@
 import simd
 
 public class Transform {
-    public var position: simd_float3 {
-        didSet {
-            matrix = generateMatrix()
-        }
-    }
+    weak var parent: GameObject?
     
-    public var rotation: simd_float3 {
-        didSet {
-            matrix = generateMatrix()
-        }
-    }
-    
-    public var scale: simd_float3 {
-        didSet {
-            // TODO: validate if generateMatrix is being called 1x or 4x during init
-            matrix = generateMatrix()
-        }
-    }
-    
+    public private(set) var position: simd_float3
+    public private(set) var rotation: simd_float3
+    public private(set) var scale: simd_float3
     public private(set) var matrix: simd_float4x4
-    public var matrix3x3: simd_float3x3 {
-        let column0 = matrix.columns.0
-        let column1 = matrix.columns.1
-        let column2 = matrix.columns.2
-        
-        return simd_float3x3(columns: (
-            simd_float3(column0.x, column1.x, column2.x),
-            simd_float3(column0.y, column1.y, column2.y),
-            simd_float3(column0.z, column1.z, column2.z)
-        ))
-    }
     
-    private func generateMatrix() -> simd_float4x4 {
-        Transformation.from(
-            position: position,
-            rotation: rotation,
-            scale: scale
-        )
-    }
-    
-    public init(_ x: Float = 0, _ y: Float = 0, _ z: Float = 0, scale: Float = 1) {
+    public init(
+        _ x: Float = 0,
+        _ y: Float = 0,
+        _ z: Float = 0,
+        scale s: Float = 1
+    ) {
         self.position = .init(x, y, z)
         self.rotation = .init(0, 0, 0)
-        self.scale = .init(scale, scale, scale)
+        self.scale = .init(s, s, s)
+        
         self.matrix = Transformation.from(
             position: position,
             rotation: rotation,
-            scale: self.scale
+            scale: scale
         )
     }
     
@@ -68,9 +41,7 @@ public class Transform {
         )
     }
     
-    public init(
-        matrix: simd_float4x4
-    ) {
+    public init(_ matrix: simd_float4x4) {
         self.position = .init(
             matrix.columns.3.x,
             matrix.columns.3.y,
@@ -94,6 +65,75 @@ public class Transform {
         self.matrix = matrix
     }
     
+    private func updateMatrix() {
+        matrix = Transformation.from(
+            position: position,
+            rotation: rotation,
+            scale: scale
+        )
+    }
+    
+    public func set(position: simd_float3) {
+        self.position = position
+        updateMatrix()
+    }
+    
+    public func set(position x: Float, _ y: Float, _ z: Float) {
+        set(position: .init(x, y, z))
+    }
+
+    public func set(rotation: simd_float3) {
+        self.rotation = rotation
+        updateMatrix()
+    }
+    
+    public func set(rotation x: Float, _ y: Float, _ z: Float) {
+        set(rotation: .init(x, y, z))
+    }
+
+    public func set(rotation: simd_quatf) {
+        self.rotation = simd_euler_angles(rotation)
+        self.matrix = Transformation.from(
+            position: position,
+            rotation: self.rotation,
+            scale: scale
+        )
+    }
+    
+    public func set(scale: simd_float3) {
+        self.scale = scale
+        updateMatrix()
+    }
+    
+    public func set(scale x: Float, _ y: Float, _ z: Float) {
+        set(scale: .init(x, y, z))
+    }
+    
+    public func set(_ matrix: simd_float4x4) {
+        self.position = .init(
+            matrix.columns.3.x,
+            matrix.columns.3.y,
+            matrix.columns.3.z
+        )
+
+        self.scale = .init(
+            simd_length(matrix.columns.0),
+            simd_length(matrix.columns.1),
+            simd_length(matrix.columns.2)
+        )
+        
+        let rotationMatrix = simd_float3x3(rows: [
+            .init(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z) / scale.x,
+            .init(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z) / scale.y,
+            .init(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z) / scale.z
+        ])
+        
+        self.rotation = simd_euler_angles(simd_quatf(rotationMatrix))
+        
+        self.matrix = matrix
+    }
+
+    // TODO: fix. this is acting very funny when z is positive I think ? my controls get inverted when disabling
     public func look(at target: Transform, up: simd_float3 = .init(0, 1, 0)) {
         let forward = simd_normalize(target.position - position)
         let right = simd_normalize(simd_cross(up, forward))

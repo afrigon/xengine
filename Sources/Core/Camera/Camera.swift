@@ -30,13 +30,13 @@ public class Camera {
     }
     
     public func set(position: simd_float3) {
-        self.transform.position = position
+        self.transform.set(position: position)
         
         viewProjectionMatrix = projectionMatrix * transform.matrix.inverse
     }
     
     public func set(rotation: simd_float3) {
-        self.transform.rotation = rotation
+        self.transform.set(rotation: rotation)
         
         viewProjectionMatrix = projectionMatrix * transform.matrix.inverse
     }

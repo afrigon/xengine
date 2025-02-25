@@ -118,118 +118,74 @@ class MetalRenderer {
         
         var globals = globals
         
-        let lights = scene.query {
-            if let light = $0.getComponent(Light.self) {
-                return light.enabled
-            }
-            
-            return false
-        }
-        
         // TODO: filter lights based on distance / other euristics
+        let lights = scene.query(component: Light.self)
         
-        let directionalLights: [DirectionalLight] = lights.compactMap { (entry) -> DirectionalLight? in
-            guard let light = entry.object.getComponent(Light.self) else {
-                return nil
+        let directionalLights: [DirectionalLight] = lights
+            .compactMap { (light) -> DirectionalLight? in
+                guard case let .directional(options) = light.options else {
+                    return nil
+                }
+                
+                return .init(
+                    direction: simd_normalize(simd_float3(
+                        light.transform.rotation.x,
+                        light.transform.rotation.y,
+                        -light.transform.rotation.z
+                    )),
+                    color: options.color.rgb,
+                    intensity: options.intensity
+                )
             }
             
-            guard case let .directional(options) = light.options else {
-                return nil
+        let jobs: [RenderJob] = (scene
+            .query(component: MeshRenderer.self)
+            .map {
+                .basic(
+                    mode: repository.materials[$0.material]?.commonOptions.renderingMode ?? .opaque,
+                    shader: repository.getShaderIdentifier(for: $0.material),
+                    renderer: $0
+                )
+            } +
+        scene
+            .query(component: SkinnedMeshRenderer.self)
+            .map {
+                .skinned(
+                    mode: repository.materials[$0.material]?.commonOptions.renderingMode ?? .opaque,
+                    shader: repository.getShaderIdentifier(for: $0.material),
+                    renderer: $0
+                )
             }
-            
-            return .init(
-                direction: simd_normalize(simd_float3(
-                    -entry.transform.columns.2.x,
-                    -entry.transform.columns.2.y,
-                    -entry.transform.columns.2.z
-                )),
-                color: options.color.rgb,
-                intensity: options.intensity
-            )
-        }
-        + [
-            .init(
-                direction: simd_float3(0, 1, 0),
-                color: simd_float3(1, 1, 1),
-                intensity: 0
-            )  // add a dummy light to prevent empty metal buffer
-        ]
-            
-        let renderable = scene.query {
-            if let renderer = $0.getComponent(MeshRenderer.self) {
-                return renderer.enabled
-            }
-            
-            if let renderer = $0.getComponent(SkinnedMeshRenderer.self) {
-                return renderer.enabled
-            }
-
-            return false
-        }
+        )
+        .sorted()
         
         // TODO: filter visible objects
         
-        var jobs: [WorldObject<RenderJob>] = renderable
-            .flatMap { (entry) -> [WorldObject<RenderJob>] in
-                entry.object.getComponents(MeshRenderer.self)
-                    .map { renderer in
-                        WorldObject<RenderJob>(
-                            transform: entry.transform,
-                            object: .basic(
-                                mode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
-                                shader: repository.getShaderIdentifier(for: renderer.material),
-                                renderer: renderer
-                            )
-                        )
-                    }
-            }
-        
-        let skinnedJobs = renderable
-            .flatMap { (entry) -> [WorldObject<RenderJob>] in
-                entry.object.getComponents(SkinnedMeshRenderer.self)
-                    .map { renderer in
-                        WorldObject<RenderJob>(
-                            transform: entry.transform,
-                            object: .skinned(
-                                mode: repository.materials[renderer.material]?.commonOptions.renderingMode ?? .opaque,
-                                shader: repository.getShaderIdentifier(for: renderer.material),
-                                renderer: renderer
-                            )
-                        )
-                    }
-            }
+        var shaderCache: String? = nil
+        var materialCache: String? = nil
+        var meshCache: String? = nil
 
-        jobs.append(contentsOf: skinnedJobs)
-        
-        jobs = jobs.sorted(by: { (lhs: WorldObject<RenderJob>, rhs: WorldObject<RenderJob>) -> Bool in
-            lhs.object < rhs.object
-        })
-        
-        var lastShader: String? = nil
-        var lastMaterial: String? = nil
-        var lastMesh: String? = nil
-        
         var pipeline: MTLRenderPipelineState? = nil
         var material: Material? = nil
         var mesh: MetalMesh? = nil
 
         for job in jobs {
-            let currentMaterial = debug.materialOverride ?? job.object.material
+            let currentMaterial = debug.materialOverride ?? job.material
             let currentShader = debug.materialOverride.map {
                 repository.getShaderIdentifier(for: $0)
-            } ?? job.object.shader
+            } ?? job.shader
             
-            if lastShader != currentShader {
+            if shaderCache != currentShader {
                 pipeline = repository.createOrGetShader(currentShader) {
-                    self.createRenderPipelineState(currentShader, type: job.object.type)
+                    self.createRenderPipelineState(currentShader, type: job.type)
                 }
                 
                 sceneEncoder.setRenderPipelineState(pipeline!)
                 
-                lastShader = currentShader
+                shaderCache = job.shader
             }
             
-            if lastMaterial != currentMaterial {
+            if materialCache != currentMaterial {
                 material = repository.materials[currentMaterial]
 
                 if let material {
@@ -248,7 +204,10 @@ class MetalRenderer {
                                 alphaCutoff: material.commonOptions.renderingMode.alphaCutoff
                             )
                             sceneEncoder.setFragmentBytes([data], length: MemoryLayout<BlinnPhongData>.stride, index: 1)
-                            sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
+                            
+                            if !directionalLights.isEmpty {
+                                sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
+                            }
                             
                             if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {
                                 sceneEncoder.setFragmentTexture(albedo, index: 3)
@@ -258,11 +217,11 @@ class MetalRenderer {
                     }
                 }
                 
-                lastMaterial = currentMaterial
+                materialCache = job.material
             }
             
-            if lastMesh != job.object.mesh {
-                mesh = repository.meshes[job.object.mesh]
+            if meshCache != job.mesh {
+                mesh = repository.meshes[job.mesh]
                 
                 if let mesh {
                     sceneEncoder.setVertexBuffer(mesh.verticesBuffer, index: 1)
@@ -270,7 +229,7 @@ class MetalRenderer {
                     sceneEncoder.setVertexBuffer(mesh.tangentsBuffer, index: 3)
                     sceneEncoder.setVertexBuffer(mesh.uv0Buffer, index: 4)
                     
-                    if case .skinned(_, _, let renderer) = job.object {
+                    if case .skinned(_, _, let renderer) = job {
                         guard let boneIndices = mesh.boneIndicesBuffer else {
                             continue
                         }
@@ -278,15 +237,34 @@ class MetalRenderer {
                         sceneEncoder.setVertexBuffer(boneIndices, index: 5)
                     }
                     
-                    lastMesh = job.object.mesh
+                    meshCache = job.mesh
                 }
             }
             
             if let mesh {
-                globals.modelMatrix = job.transform
-                globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * job.transform
-                globals.normalMatrix = simd_transpose(simd_inverse(job.transform.matrix3x3))
-                
+                switch job {
+                    case .basic(_, _, let renderer):
+                        globals.modelMatrix = renderer.transform.matrix
+                        globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * globals.modelMatrix
+                        globals.normalMatrix = simd_transpose(simd_inverse(globals.modelMatrix.matrix3x3))
+                    case .skinned(_, _, let renderer):
+                        globals.modelMatrix = renderer.transform.matrix
+                        globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * globals.modelMatrix
+                        globals.normalMatrix = simd_transpose(simd_inverse(globals.modelMatrix.matrix3x3))
+                        
+                        let bones = renderer.parent?
+                            .query(component: Bone.self)
+                            .compactMap { $0.animationTransform.matrix }
+                        
+                        guard let bones, let boneBuffer = device.makeBuffer(length: MemoryLayout<simd_float4x4>.stride * bones.count) else {
+                            break  // TODO: investigate if this crashes when hit, maybe just continue instead
+                        }
+                        
+                        boneBuffer.contents().copyMemory(from: bones, byteCount: MemoryLayout<simd_float4x4>.stride * bones.count)
+                        
+                        sceneEncoder.setVertexBuffer(boneBuffer, index: 6)
+                }
+
                 sceneEncoder.setVertexBytes(
                     [globals],
                     length: MemoryLayout<Globals>.stride,
@@ -298,36 +276,6 @@ class MetalRenderer {
                     length: MemoryLayout<Globals>.stride,
                     index: 0
                 )
-                
-                if case .skinned(_, _, let renderer) = job.object {
-                    guard let root = renderer.rootBone?.parent else {
-                        continue
-                    }
-                    
-                    let bones = root
-                        .query(parentTransform: .init(diagonal: .init(repeating: 1))) {
-                            if let bone = $0.getComponent(Bone.self) {
-                                return bone.enabled
-                            }
-                            
-                            return false
-                        }
-                        .compactMap { (entry) -> simd_float4x4? in
-                            guard let bone = entry.object.getComponent(Bone.self) else {
-                                return nil
-                            }
-                            
-                            return bone.animationTransform.matrix
-                        }
-                    
-                    guard let boneBuffer = device.makeBuffer(length: MemoryLayout<simd_float4x4>.stride * bones.count) else {
-                        return nil
-                    }
-                    
-                    boneBuffer.contents().copyMemory(from: bones, byteCount: MemoryLayout<simd_float4x4>.stride * bones.count)
-                    
-                    sceneEncoder.setVertexBuffer(boneBuffer, index: 6)
-                }
 
                 sceneEncoder.drawIndexedPrimitives(
                     type: .triangle,

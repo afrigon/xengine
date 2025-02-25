@@ -8,12 +8,12 @@ public class Bone: GameComponent {
         "Bone"
     }
     
-    public var baseTransform: Transform
+    public var baseTransform: Transform = .init()
     public var animationTransform: Transform = .init()
     public var finalTransform: simd_float4x4 = .init()
 
-    public init(_ transform: Transform) {
-        self.baseTransform = transform
+    public init() {
+        
     }
     
     public func update(input: Input, delta: Float) { }
