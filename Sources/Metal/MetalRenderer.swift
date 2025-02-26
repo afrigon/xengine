@@ -118,8 +118,15 @@ class MetalRenderer {
         
         var globals = globals
         
-        // TODO: filter lights based on distance / other euristics
-        let lights = scene.query(component: Light.self)
+        let lights = scene
+            .query(component: Light.self)
+            .filter { _ in
+                // TODO: filter lights based on distance / other euristics
+                
+                true
+            } + [  // adding default lights so the shaders don't crash
+                Light(options: .directional(.init(color: .black, intensity: 0)))
+            ]
         
         let directionalLights: [DirectionalLight] = lights
             .compactMap { (light) -> DirectionalLight? in
@@ -127,6 +134,7 @@ class MetalRenderer {
                     return nil
                 }
                 
+                // TODO: double check why I need to negate this value. what should be the correct direction to send for directional light
                 return .init(
                     direction: simd_normalize(simd_float3(
                         light.transform.rotation.x,
@@ -174,15 +182,16 @@ class MetalRenderer {
             let currentShader = debug.materialOverride.map {
                 repository.getShaderIdentifier(for: $0)
             } ?? job.shader
+            let shaderId = "\(currentShader)_\(job.type)"
             
-            if shaderCache != currentShader {
-                pipeline = repository.createOrGetShader(currentShader) {
+            if shaderCache != shaderId {
+                pipeline = repository.createOrGetShader(currentShader, type: job.type) {
                     self.createRenderPipelineState(currentShader, type: job.type)
                 }
                 
                 sceneEncoder.setRenderPipelineState(pipeline!)
                 
-                shaderCache = job.shader
+                shaderCache = shaderId
             }
             
             if materialCache != currentMaterial {
@@ -204,10 +213,7 @@ class MetalRenderer {
                                 alphaCutoff: material.commonOptions.renderingMode.alphaCutoff
                             )
                             sceneEncoder.setFragmentBytes([data], length: MemoryLayout<BlinnPhongData>.stride, index: 1)
-                            
-                            if !directionalLights.isEmpty {
-                                sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
-                            }
+                            sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
                             
                             if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {
                                 sceneEncoder.setFragmentTexture(albedo, index: 3)
@@ -254,7 +260,7 @@ class MetalRenderer {
                         
                         let bones = renderer.parent?
                             .query(component: Bone.self)
-                            .compactMap { $0.animationTransform.matrix }
+                            .compactMap { $0.finalTransform }
                         
                         guard let bones, let boneBuffer = device.makeBuffer(length: MemoryLayout<simd_float4x4>.stride * bones.count) else {
                             break  // TODO: investigate if this crashes when hit, maybe just continue instead
@@ -329,7 +335,7 @@ class MetalRenderer {
         postEncoder: MTLRenderCommandEncoder,
         deltaTime: Float
     ) {
-        let pipeline = repository.createOrGetShader(effect.shader) {
+        let pipeline = repository.createOrGetShader(effect.shader, type: "post") {
             self.createPostRenderPipelineState(effect.shader)
         }
         
@@ -366,7 +372,7 @@ class MetalRenderer {
         }
         outputEncoder.label = "Output Encoder"
         
-        let outputPipeline = repository.createOrGetShader("identity") {
+        let outputPipeline = repository.createOrGetShader("identity", type: "post") {
             self.createPostRenderPipelineState("identity")
         }
         

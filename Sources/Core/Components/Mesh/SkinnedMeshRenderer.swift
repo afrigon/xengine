@@ -1,3 +1,4 @@
+/// - note: the `SkinnedMeshRenderer` assumes it is attached to the game object with the root bone.
 public class SkinnedMeshRenderer: GameComponent {
     public weak var parent: GameObject?
     public var enabled: Bool = true

@@ -29,6 +29,13 @@ let package = Package(
             resources: [
                 .process("Resources/Shaders")
             ]
+        ),
+        .testTarget(
+            name: "XEngineCoreTests",
+            dependencies: [
+                "XEngineCore"
+            ],
+            path: "Tests/Core"
         )
     ]
 )

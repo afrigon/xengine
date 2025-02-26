@@ -73,6 +73,7 @@ public class Transform {
         )
     }
     
+    // TODO: when setting anything in this component maybe all the game objects children should be updated as well
     public func set(position: simd_float3) {
         self.position = position
         updateMatrix()

@@ -2,15 +2,25 @@ import simd
 
 public struct Transformation {
     public static func from(
-        position: SIMD3<Float>,
-        rotation: SIMD3<Float>,
-        scale: SIMD3<Float>
+        position: simd_float3,
+        rotation: simd_float3,
+        scale: simd_float3
     ) -> simd_float4x4 {
         Transformation.translate(position) *
         Transformation.rotate(rotation) *
         Transformation.scale(scale)
     }
     
+    public static func from(
+        position: simd_float3,
+        rotation: simd_quatf,
+        scale: simd_float3
+    ) -> simd_float4x4 {
+        Transformation.translate(position) *
+        Transformation.rotate(rotation) *
+        Transformation.scale(scale)
+    }
+
     public static func translate(_ x: Float, _ y: Float, _ z: Float) -> simd_float4x4 {
         simd_float4x4(rows: [
             .init(1, 0, 0, x),
@@ -20,7 +30,7 @@ public struct Transformation {
         ])
     }
     
-    public static func translate(_ t: SIMD3<Float>) -> simd_float4x4 {
+    public static func translate(_ t: simd_float3) -> simd_float4x4 {
         Transformation.translate(t.x, t.y, t.z)
     }
     
@@ -33,7 +43,7 @@ public struct Transformation {
         ])
     }
     
-    public static func scale(_ s: SIMD3<Float>) -> simd_float4x4 {
+    public static func scale(_ s: simd_float3) -> simd_float4x4 {
         Transformation.scale(s.x, s.y, s.z)
     }
     
@@ -61,6 +71,6 @@ public struct Transformation {
     }
     
     public static func rotate(_ r: simd_quatf) -> simd_float4x4 {
-        .init(r)  // TODO: double check that this does what I think it does
+        .init(r)
     }
 }
