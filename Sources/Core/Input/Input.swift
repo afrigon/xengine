@@ -1,3 +1,5 @@
+import simd
+
 public enum Keycode: UInt16 {
     
     // Layout-independent Keys
@@ -124,25 +126,33 @@ public enum Keycode: UInt16 {
     case keypad9        = 0x5C
 }
 
+public enum Button: Hashable {
+    case keyboard(Keycode)
+    case mouse(Int)
+}
+
 public class Input {
-    private var store: Set<Keycode> = .init()
+    private var store: Set<Button> = .init()
     
-    private var pressed: Set<Keycode> = .init()
-    private var released: Set<Keycode> = .init()
+    private var pressed: Set<Button> = .init()
+    private var released: Set<Button> = .init()
     
-    public private(set) var deltaX: Float = 0
-    public private(set) var deltaY: Float = 0
-    
+    public private(set) var cursorDelta: simd_float2 = .zero
+    public private(set) var scrollDelta: simd_float2 = .zero
+
     public init() {}
     
     public func addCursorDelta(_ x: Float, _ y: Float) {
-        deltaX += x
-        deltaY += y
+        cursorDelta += .init(x, y)
     }
     
-    public func clearCursorDelta() {
-        deltaX = 0
-        deltaY = 0
+    public func addScrollDelta(_ x: Float, _ y: Float) {
+        scrollDelta += .init(x, y)
+    }
+
+    public func clearDelta() {
+        cursorDelta = .zero
+        scrollDelta = .zero
     }
     
     public func clearKeyboardUpdates() {
@@ -150,25 +160,42 @@ public class Input {
         released.removeAll()
     }
     
-    public func pressed(_ key: Keycode) {
+    public func clearKeyboard() {
+        store.removeAll()
+        clearKeyboardUpdates()
+    }
+    
+    public func pressed(_ key: Button) {
         store.insert(key)
         pressed.insert(key)
     }
     
-    public func released(_ key: Keycode) {
+    public func released(_ key: Button) {
         store.remove(key)
         released.insert(key)
     }
     
-    public func isHeld(_ key: Keycode) -> Bool {
-        store.contains(key)
+    public func isHeld(key: Keycode) -> Bool {
+        store.contains(.keyboard(key))
     }
     
-    public func isPressed(_ key: Keycode) -> Bool {
-        pressed.contains(key)
+    public func isPressed(key: Keycode) -> Bool {
+        pressed.contains(.keyboard(key))
     }
     
-    public func isReleased(_ key: Keycode) -> Bool {
-        released.contains(key)
+    public func isReleased(key: Keycode) -> Bool {
+        released.contains(.keyboard(key))
+    }
+    
+    public func isHeld(mouse index: Int) -> Bool {
+        store.contains(.mouse(index))
+    }
+    
+    public func isPressed(mouse index: Int) -> Bool {
+        pressed.contains(.mouse(index))
+    }
+    
+    public func isReleased(key index: Int) -> Bool {
+        released.contains(.mouse(index))
     }
 }

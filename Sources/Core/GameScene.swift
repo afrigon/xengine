@@ -2,7 +2,6 @@ import simd
 import Metal
 
 public class GameScene {
-    public var camera: Camera = .init()
     public var objects: [GameObject] = []
     
     public init() { }
@@ -11,6 +10,10 @@ public class GameScene {
         for object in objects where object.enabled {
             object.update(input: input, delta: delta)
         }
+    }
+    
+    public var mainCamera: Camera? {
+        query(component: Camera.self).first
     }
     
     public func query<T: GameComponent>(component type: T.Type) -> [T] {
@@ -34,12 +37,6 @@ public class GameScene {
     }
     
     public func debug() {
-        print("[X] Main Camera <Camera>")
-        
-        for layer in camera.postProcessing.layers {
-            print(" └─ [X] Post Processing Layer <\(layer.effect.shader)>")
-        }
-        
         _debug(objects: objects)
     }
     

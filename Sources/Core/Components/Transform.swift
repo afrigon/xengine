@@ -4,7 +4,7 @@ public class Transform {
     weak var parent: GameObject?
     
     public private(set) var position: simd_float3
-    public private(set) var rotation: simd_float3
+    public private(set) var rotation: simd_quatf
     public private(set) var scale: simd_float3
     public private(set) var matrix: simd_float4x4
     
@@ -15,7 +15,7 @@ public class Transform {
         scale s: Float = 1
     ) {
         self.position = .init(x, y, z)
-        self.rotation = .init(0, 0, 0)
+        self.rotation = .init(vector: .init(0, 0, 0, 1))
         self.scale = .init(s, s, s)
         
         self.matrix = Transformation.from(
@@ -27,7 +27,7 @@ public class Transform {
     
     public init(
         position: simd_float3 = .init(0, 0, 0),
-        rotation: simd_float3 = .init(0, 0, 0),
+        rotation: simd_quatf = .init(vector: .init(0, 0, 0, 1)),
         scale: simd_float3 = .init(1, 1, 1)
     ) {
         self.position = position
@@ -60,8 +60,7 @@ public class Transform {
             .init(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z) / scale.z
         ])
         
-        self.rotation = simd_euler_angles(simd_quatf(rotationMatrix))
-        
+        self.rotation = simd_quatf(rotationMatrix)
         self.matrix = matrix
     }
     
@@ -83,22 +82,9 @@ public class Transform {
         set(position: .init(x, y, z))
     }
 
-    public func set(rotation: simd_float3) {
+    public func set(rotation: simd_quatf) {
         self.rotation = rotation
         updateMatrix()
-    }
-    
-    public func set(rotation x: Float, _ y: Float, _ z: Float) {
-        set(rotation: .init(x, y, z))
-    }
-
-    public func set(rotation: simd_quatf) {
-        self.rotation = simd_euler_angles(rotation)
-        self.matrix = Transformation.from(
-            position: position,
-            rotation: self.rotation,
-            scale: scale
-        )
     }
     
     public func set(scale: simd_float3) {
@@ -129,46 +115,16 @@ public class Transform {
             .init(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z) / scale.z
         ])
         
-        self.rotation = simd_euler_angles(simd_quatf(rotationMatrix))
-        
+        self.rotation = simd_quatf(rotationMatrix)
         self.matrix = matrix
     }
 
-    // TODO: fix. this is acting very funny when z is positive I think ? my controls get inverted when disabling
-    public func look(at target: Transform, up: simd_float3 = .init(0, 1, 0)) {
+    public func look(at target: Transform, up: simd_float3 = .up) {
         let forward = simd_normalize(target.position - position)
         let right = simd_normalize(simd_cross(up, forward))
         let up = simd_cross(forward, right)
         
-        let rotation = simd_float3x3(columns: (right, up, forward))
-        let q = simd_quatf(rotation)
-        self.rotation = simd_euler_angles(q)
+        let rotation = simd_float3x3(right, up, forward)
+        set(rotation: simd_quatf(rotation))
     }
-}
-
-func simd_euler_angles(_ q: simd_quatf) -> simd_float3 {
-    let x = q.vector.x
-    let y = q.vector.y
-    let z = q.vector.z
-    let w = q.vector.w
-
-    // Compute Euler angles (XYZ order)
-    let sinr_cosp = 2 * (w * x + y * z)
-    let cosr_cosp = 1 - 2 * (x * x + y * y)
-    let roll = atan2(sinr_cosp, cosr_cosp) // X-axis
-
-    let sinp = 2 * (w * y - z * x)
-    let pitch: Float
-    if abs(sinp) >= 1 {
-        pitch = copysign(.pi / 2, sinp) // Handle gimbal lock
-    } else {
-        pitch = asin(sinp) // Y-axis
-    }
-
-    let siny_cosp = 2 * (w * z + x * y)
-    let cosy_cosp = 1 - 2 * (y * y + z * z)
-    let yaw = atan2(siny_cosp, cosy_cosp) // Z-axis
-
-    // Convert from radians to degrees
-    return .init(roll, pitch, yaw) * (180.0 / .pi)
 }

@@ -11,6 +11,8 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     
     public var debug: DebugOptions = .init()
     
+    private var lastTime: Double? = nil
+    
     public var resourceRepository: MetalResourceRepository {
         renderer.repository
     }
@@ -26,8 +28,9 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     }
     
     @MainActor
-    func setup(_ view: MTKView) {
+    func setup(_ view: XEngineView) {
         view.delegate = self
+        view.input = input
         
         renderer.setup(with: view)
         resize(width: UInt32(view.frame.width), height: UInt32(view.frame.height))
@@ -36,24 +39,29 @@ public class MetalDriver: NSObject, MTKViewDelegate {
     private func resize(width: UInt32, height: UInt32) {
         globals.width = width
         globals.height = height
-        scene.camera.projection = .perspective(aspect: Float(width) / Float(height))
+        
+        for camera in scene.query(component: Camera.self) {
+            camera.resize(width: width, height: height)
+        }
 
         renderer.resize(width: width, height: height)
     }
     
     private func update() {
-        let lastTime = globals.time ?? Float(CACurrentMediaTime())
-        let currentTime = Float(CACurrentMediaTime())
-        let delta = currentTime - lastTime
-        globals.time = currentTime
+        let lastTime = lastTime ?? CACurrentMediaTime()
+        let currentTime = CACurrentMediaTime()
+        let delta = Float(currentTime - lastTime)
+        
+        self.lastTime = currentTime
+        
         globals.deltaTime = delta
         
         scene.update(input: input, delta: delta)
-        input.clearCursorDelta()
+        input.clearDelta()
         input.clearKeyboardUpdates()
         
-        globals.projectionMatrix = scene.camera.projectionMatrix
-        globals.viewMatrix = scene.camera.transform.matrix.inverse
+        globals.projectionMatrix = scene.mainCamera?.projectionMatrix ?? .init(diagonal: .one)
+        globals.viewMatrix = scene.mainCamera?.transform.matrix.inverse ?? .init(diagonal: .one)
     }
     
     public func draw(in view: MTKView) {

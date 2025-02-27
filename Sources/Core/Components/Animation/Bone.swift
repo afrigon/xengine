@@ -17,7 +17,7 @@ public class Bone: GameComponent {
     let inverseBindTransform: simd_float4x4
 
     /// transform to apply to this bone in local space.
-    var animationTransform: simd_float4x4 = .init(diagonal: .init(repeating: 1))
+    var animationTransform: simd_float4x4 = .init(diagonal: .one)
     
     /// bone transform in model space after animation.
     var poseTransform: simd_float4x4

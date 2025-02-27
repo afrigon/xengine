@@ -83,6 +83,10 @@ class MetalRenderer {
             return
         }
         
+        guard let camera = scene.mainCamera else {
+            return
+        }
+        
         drawFrame(on: drawable) { commandBuffer in
             guard let sceneTexture = drawScene(scene: scene, globals: globals, debug: debug, commandBuffer: commandBuffer) else {
                 return
@@ -90,7 +94,7 @@ class MetalRenderer {
             
             let processed = drawPost(
                 from: sceneTexture,
-                effects: scene.camera.postProcessing.effects,
+                effects: camera.postProcessing.effects,
                 deltaTime: globals.deltaTime,
                 commandBuffer: commandBuffer
             )
@@ -104,7 +108,11 @@ class MetalRenderer {
     }
     
     private func drawScene(scene: GameScene, globals: Globals, debug: DebugOptions, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
-        sceneRenderTarget.setClearColor(scene.camera.clear)
+        guard let camera = scene.mainCamera else {
+            return nil
+        }
+        
+        sceneRenderTarget.setClearColor(camera.clearColor)
         
         guard let descriptor = sceneRenderTarget.renderPassDescriptor,
               let sceneEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
@@ -135,11 +143,14 @@ class MetalRenderer {
                 }
                 
                 // TODO: double check why I need to negate this value. what should be the correct direction to send for directional light
+                
+                let rotation = light.transform.rotation.eulerAngles
+                
                 return .init(
                     direction: simd_normalize(simd_float3(
-                        light.transform.rotation.x,
-                        light.transform.rotation.y,
-                        -light.transform.rotation.z
+                        rotation.x,
+                        rotation.y,
+                        -rotation.z
                     )),
                     color: options.color.rgb,
                     intensity: options.intensity
@@ -251,11 +262,11 @@ class MetalRenderer {
                 switch job {
                     case .basic(_, _, let renderer):
                         globals.modelMatrix = renderer.transform.matrix
-                        globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * globals.modelMatrix
+                        globals.modelViewProjectionMatrix = camera.viewProjectionMatrix * globals.modelMatrix
                         globals.normalMatrix = simd_transpose(simd_inverse(globals.modelMatrix.matrix3x3))
                     case .skinned(_, _, let renderer):
                         globals.modelMatrix = renderer.transform.matrix
-                        globals.modelViewProjectionMatrix = scene.camera.viewProjectionMatrix * globals.modelMatrix
+                        globals.modelViewProjectionMatrix = camera.viewProjectionMatrix * globals.modelMatrix
                         globals.normalMatrix = simd_transpose(simd_inverse(globals.modelMatrix.matrix3x3))
                         
                         let bones = renderer.parent?

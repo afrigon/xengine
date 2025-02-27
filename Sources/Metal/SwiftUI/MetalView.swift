@@ -11,8 +11,8 @@ public struct MetalView: UIViewRepresentable {
         self.onSetup = onSetup
     }
     
-    public func makeUIView(context: Context) -> MTKView {
-        let view = MTKView()
+    public func makeUIView(context: Context) -> XEngineView {
+        let view = XEngineView()
         
         driver?.setup(view)
         onSetup?()
@@ -20,7 +20,7 @@ public struct MetalView: UIViewRepresentable {
         return view
     }
     
-    public func updateUIView(_ uiView: MTKView, context: Context) { }
+    public func updateUIView(_ uiView: XEngineView, context: Context) { }
 }
 #endif
 
@@ -34,8 +34,8 @@ public struct MetalView: NSViewRepresentable {
         self.onSetup = onSetup
     }
     
-    public func makeNSView(context: Context) -> MTKView {
-        let view = MTKView()
+    public func makeNSView(context: Context) -> XEngineView {
+        let view = XEngineView()
         
         driver?.setup(view)
         onSetup?()
@@ -43,6 +43,6 @@ public struct MetalView: NSViewRepresentable {
         return view
     }
     
-    public func updateNSView(_ uiView: MTKView, context: Context) { }
+    public func updateNSView(_ uiView: XEngineView, context: Context) { }
 }
 #endif
