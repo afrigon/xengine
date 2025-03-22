@@ -14,10 +14,14 @@ public class PostProcessing: Toggleable {
     }
 
     public init(effects: [PostProcessingEffect]) {
-        self.layers = effects.map { PostProcessingLayer(effect: $0) }
+        self.layers = effects.map { .init(effect: $0) }
     }
     
     public init(layers: [PostProcessingLayer]) {
         self.layers = layers
+    }
+    
+    public func add(_ effect: PostProcessingEffect) {
+        self.layers.append(.init(effect: effect))
     }
 }

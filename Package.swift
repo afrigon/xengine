@@ -13,12 +13,20 @@ let package = Package(
     ],
     products: [
         .library(name: "XEngineCore", targets: ["XEngineCore"]),
-        .library(name: "XEngineMetal", targets: ["XEngineMetal"])
+        .library(name: "XEngineMetal", targets: ["XEngineMetal"]),
+        .library(name: "XEngineLoader", targets: ["XEngineLoader"])
     ],
     targets: [
         .target(
             name: "XEngineCore",
-                path: "Sources/Core"
+            path: "Sources/Core"
+        ),
+        .target(
+            name: "XEngineLoader",
+            dependencies: [
+                .target(name: "XEngineCore")
+            ],
+            path: "Sources/Loader"
         ),
         .target(
             name: "XEngineMetal",

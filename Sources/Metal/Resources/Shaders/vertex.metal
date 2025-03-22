@@ -42,6 +42,7 @@ vertex RasterizerData vertex_basic(
     RasterizerData output;
 
     output.position = globals.modelViewProjectionMatrix * float4(positions[id], 1.0);
+    output.fragment_position = float3(globals.modelMatrix * float4(positions[id], 1.0));
     output.normal = normalize(globals.normalMatrix * normals[id]);
     output.tangent = normalize(globals.normalMatrix * tangents[id]);
     output.uv0 = uv0[id];
@@ -63,7 +64,8 @@ vertex RasterizerData vertex_skinned(
 
     matrix_float4x4 bone = bones[bone_indices[id]];
     output.position = globals.modelViewProjectionMatrix * (bone * float4(positions[id], 1.0));
-    
+    output.fragment_position = float3(globals.modelMatrix * (bone * float4(positions[id], 1.0)));
+
     float3x3 boneRotation = float3x3(bone.columns[0].xyz,
                                      bone.columns[1].xyz,
                                      bone.columns[2].xyz);

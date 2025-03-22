@@ -4,10 +4,15 @@
 
 using namespace metal;
 
-fragment float4 fragment_unlit_color(
-    RasterizerData input  [[stage_in]],
+fragment FragmentOutput fragment_unlit_color(
+    RasterizerData input       [[stage_in]],
     constant Globals& globals  [[buffer(0)]],
     constant float4& color     [[buffer(1)]]
 ) {
-    return color;
+    FragmentOutput output;
+    
+    output.color = color;
+    output.normal = float4(normalize(input.normal) * 0.5 + 0.5, 1.0);
+    
+    return output;
 }

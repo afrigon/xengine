@@ -55,6 +55,6 @@ public struct KeyframeTimeline<T> {
             left.value(at: time),
             right.value(at: time),
             (time - left.time) / (right.time - left.time)
-        )
+        ) // TODO: the animations seem to go backward kekw. figure out if this is the cause.
     }
 }

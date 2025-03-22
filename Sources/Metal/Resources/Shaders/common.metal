@@ -4,14 +4,20 @@
 #include <simd/simd.h>
 
 struct RasterizerData {
-    float4 position [[position]];
+    float4 position  [[position]];
+    float3 fragment_position;
     float3 normal;
     float3 tangent;
     float2 uv0;
 };
 
+struct FragmentOutput {
+    float4 color   [[ color(0) ]];
+    float4 normal  [[ color(1) ]];
+};
+
 struct UnlitRasterizerData {
-    float4 position [[position]];
+    float4 position  [[position]];
     float2 uv;
 };
 

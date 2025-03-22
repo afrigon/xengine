@@ -1,19 +1,26 @@
 import Metal
 import XEngineCore
 
-class ColorDepthRenderTarget: RenderTarget {
+class ColorDepthNormalRenderTarget: RenderTarget {
     private(set) var colorTexture: MTLTexture? = nil
+    private(set) var normalTexture: MTLTexture? = nil
     private(set) var depthTexture: MTLTexture? = nil
     
     private(set) var renderPassDescriptor: MTLRenderPassDescriptor?
 
     private let colorFormat: MTLPixelFormat
+    private let normalFormat: MTLPixelFormat
     private let depthFormat: MTLPixelFormat
     
     private var clearColor: Color = .init(red: 0.2, green: 0.2, blue: 0.2)
     
-    init(colorFormat: MTLPixelFormat, depthFormat: MTLPixelFormat) {
+    init(
+        colorFormat: MTLPixelFormat,
+        normalFormat: MTLPixelFormat,
+        depthFormat: MTLPixelFormat
+    ) {
         self.colorFormat = colorFormat
+        self.normalFormat = normalFormat
         self.depthFormat = depthFormat
     }
     
@@ -64,6 +71,19 @@ class ColorDepthRenderTarget: RenderTarget {
 
         self.depthTexture = device.makeTexture(descriptor: depthDescriptor)
         
+        // Normal Texture
+        
+        let normalDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: normalFormat,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        normalDescriptor.usage = [.shaderRead, .renderTarget]
+        normalDescriptor.storageMode = .private
+
+        self.normalTexture = device.makeTexture(descriptor: normalDescriptor)
+
         // Render Pass Descriptor
         
         let descriptor = MTLRenderPassDescriptor()
@@ -78,6 +98,11 @@ class ColorDepthRenderTarget: RenderTarget {
             alpha: Double(clearColor.alpha)
         )
         
+        descriptor.colorAttachments[1].texture = normalTexture
+        descriptor.colorAttachments[1].loadAction = .clear
+        descriptor.colorAttachments[1].storeAction = .store
+        descriptor.colorAttachments[1].clearColor = .init(red: 0.5, green: 0.5, blue: 1, alpha: 1)
+
         descriptor.depthAttachment.texture = depthTexture
         descriptor.depthAttachment.loadAction = .clear
         descriptor.depthAttachment.storeAction = .store

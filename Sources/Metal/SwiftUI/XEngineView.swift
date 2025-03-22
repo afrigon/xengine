@@ -4,6 +4,7 @@ import XEngineCore
 public class XEngineView: MTKView {
     weak var input: Input?
     
+#if canImport(AppKit)
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         
@@ -81,7 +82,6 @@ public class XEngineView: MTKView {
         super.scrollWheel(with: event)
         
         input?.addScrollDelta(Float(event.deltaX), Float(event.deltaY))
-
     }
     
     public override func mouseDown(with event: NSEvent) {
@@ -171,4 +171,5 @@ public class XEngineView: MTKView {
             NSCursor.unhide()
         }
     }
+#endif
 }

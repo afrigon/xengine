@@ -5,7 +5,8 @@ class MetalRenderer {
     private(set) var repository: MetalResourceRepository
     
     private let colorPixelFormat: MTLPixelFormat = .bgra8Unorm_srgb
-    private let depthStencilPixelFormat: MTLPixelFormat = .depth32Float_stencil8
+    private let normalPixelFormat: MTLPixelFormat = .bgra8Unorm_srgb
+    private let depthPixelFormat: MTLPixelFormat = .depth32Float
     
     private var device: MTLDevice
     private var library: MTLLibrary
@@ -23,11 +24,12 @@ class MetalRenderer {
         return depthStencilState
     }()
 
-    private var sceneRenderTarget: ColorDepthRenderTarget
+    private var sceneRenderTarget: ColorDepthNormalRenderTarget
     private var postRenderTargetA: ColorRenderTarget
     private var postRenderTargetB: ColorRenderTarget
     private var outputRenderTarget: ScreenColorRenderTarget
 
+    private var ssaoNoise: NoiseTexture?
 
     init?() {
         guard let device = MTLCreateSystemDefaultDevice(),
@@ -41,7 +43,7 @@ class MetalRenderer {
         self.library = library
         self.commandQueue = commandQueue
         
-        self.sceneRenderTarget = ColorDepthRenderTarget(colorFormat: colorPixelFormat, depthFormat: depthStencilPixelFormat)
+        self.sceneRenderTarget = ColorDepthNormalRenderTarget(colorFormat: colorPixelFormat, normalFormat: normalPixelFormat, depthFormat: depthPixelFormat)
         self.postRenderTargetA = ColorRenderTarget(colorFormat: colorPixelFormat)
         self.postRenderTargetB = ColorRenderTarget(colorFormat: colorPixelFormat)
         self.outputRenderTarget = ScreenColorRenderTarget(colorFormat: colorPixelFormat)
@@ -51,9 +53,16 @@ class MetalRenderer {
     func setup(with view: MTKView) {
         view.device = device
         view.colorPixelFormat = colorPixelFormat
-        view.depthStencilPixelFormat = depthStencilPixelFormat
+        view.depthStencilPixelFormat = depthPixelFormat
         
         resizeTextures(width: Int(view.frame.width), height: Int(view.frame.height))
+        
+        ssaoNoise = NoiseTexture(
+            width: 800,
+            height: 600,
+            generator: WhiteNoise(),
+            device: device
+        )
     }
     
     func resize(width: UInt32, height: UInt32) {
@@ -72,7 +81,7 @@ class MetalRenderer {
     }
     
     @MainActor
-    func draw(scene: GameScene, globals: Globals, in view: MTKView, debug: DebugOptions) {
+    func draw(scene: GameScene, globals: Globals, in view: MTKView, debug: DebugOptions = .init()) {
         // resources management load / clean
         // ideas: ref count + periodic purge if above memory quota
         // for the pokemon project all asset should fit into ram without any problem
@@ -95,7 +104,7 @@ class MetalRenderer {
             let processed = drawPost(
                 from: sceneTexture,
                 effects: camera.postProcessing.effects,
-                deltaTime: globals.deltaTime,
+                globals: globals,
                 commandBuffer: commandBuffer
             )
             
@@ -221,6 +230,9 @@ class MetalRenderer {
                                 directionalLightCount: UInt32(directionalLights.count),
                                 useAlbedoTexture: m.useAlbedoTexture,
                                 albedoColor: m.albedoColor.rgb,
+                                specularStrength: m.specularStrength,
+                                shininess: m.shininess,
+                                eyePosition: camera.transform.position,
                                 alphaCutoff: material.commonOptions.renderingMode.alphaCutoff
                             )
                             sceneEncoder.setFragmentBytes([data], length: MemoryLayout<BlinnPhongData>.stride, index: 1)
@@ -309,7 +321,12 @@ class MetalRenderer {
         return sceneRenderTarget.colorTexture
     }
     
-    private func drawPost(from input: MTLTexture, effects: [PostProcessingEffect], deltaTime: Float, commandBuffer: MTLCommandBuffer) -> MTLTexture {
+    private func drawPost(
+        from input: MTLTexture,
+        effects: [PostProcessingEffect],
+        globals: Globals,
+        commandBuffer: MTLCommandBuffer
+    ) -> MTLTexture {
         var output: MTLTexture = input
         var usingA: Bool = true
         
@@ -329,7 +346,7 @@ class MetalRenderer {
                 to: target,
                 effect: effect,
                 postEncoder: encoder,
-                deltaTime: deltaTime
+                globals: globals
             )
             
             usingA = !usingA
@@ -344,8 +361,12 @@ class MetalRenderer {
         to output: MTLTexture,
         effect: PostProcessingEffect,
         postEncoder: MTLRenderCommandEncoder,
-        deltaTime: Float
+        globals: Globals
     ) {
+        defer {
+            postEncoder.endEncoding()
+        }
+        
         let pipeline = repository.createOrGetShader(effect.shader, type: "post") {
             self.createPostRenderPipelineState(effect.shader)
         }
@@ -358,20 +379,28 @@ class MetalRenderer {
             postEncoder.setFragmentTexture(sceneRenderTarget.depthTexture, index: 1)
         }
         
-        if effect.needsTime {
-            postEncoder.setFragmentBytes([deltaTime], length: MemoryLayout.size(ofValue: deltaTime), index: 2)
+        if effect.needsNormalTexture {
+            postEncoder.setFragmentTexture(sceneRenderTarget.normalTexture, index: 2)
         }
+
+        postEncoder.setFragmentBytes([globals], length: MemoryLayout<Globals>.stride, index: 3)
 
         switch effect {
             case .fxaa(let options):
-                postEncoder.setFragmentBytes([options], length: MemoryLayout.size(ofValue: options), index: 3)
+                postEncoder.setFragmentBytes([options], length: MemoryLayout<FXAAOptions>.stride, index: 4)
+            case .fog(let options):
+                postEncoder.setFragmentBytes([options], length: MemoryLayout<FogOptions>.stride, index: 4)
+            case .ssao:
+                guard let noise = ssaoNoise?.texture else {
+                    return
+                }
+                
+                postEncoder.setFragmentTexture(noise, index: 5)
             default:
                 break
         }
         
         postEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
-        
-        postEncoder.endEncoding()
     }
     
     private func drawOutput(from input: MTLTexture, to output: MTLTexture, commandBuffer: MTLCommandBuffer) {
@@ -414,7 +443,8 @@ class MetalRenderer {
         descriptor.fragmentFunction = library.makeFunction(name: "fragment_\(shader)")
 
         descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
-        descriptor.depthAttachmentPixelFormat = depthStencilPixelFormat
+        descriptor.colorAttachments[1].pixelFormat = normalPixelFormat
+        descriptor.depthAttachmentPixelFormat = depthPixelFormat
         descriptor.stencilAttachmentPixelFormat = .invalid
         
         do {

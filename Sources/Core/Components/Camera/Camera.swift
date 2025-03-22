@@ -8,7 +8,7 @@ public class Camera: GameComponent {
         "Camera"
     }
     
-    private var projection: Projection
+    public private(set) var projection: Projection
 
     public private(set) var viewProjectionMatrix: simd_float4x4
     public private(set) var projectionMatrix: simd_float4x4
@@ -42,5 +42,9 @@ public class Camera: GameComponent {
     
     public func update(input: Input, delta: Float) {
         viewProjectionMatrix = projectionMatrix * transform.matrix.inverse
+    }
+    
+    public func addPostProcessing(_ effect: PostProcessingEffect) {
+        postProcessing.add(effect)
     }
 }
