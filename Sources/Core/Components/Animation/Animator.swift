@@ -45,7 +45,7 @@ public class Animator: GameComponent {
     
     private func setBoneTransforms(object: GameObject, parent: simd_float4x4 = .init(diagonal: .one)) {
         if let bone = object.getComponent(Bone.self) {
-            bone.poseTransform = parent * (bone.transform.matrix * bone.animationTransform)
+            bone.poseTransform = parent * (bone.bindTransform * bone.animationTransform)
             bone.finalTransform = bone.poseTransform * bone.inverseBindTransform
             
             for child in object.children {

@@ -14,7 +14,7 @@ extension Script {
             let yaw = simd_quatf(angle: rotation.x, axis: .up)
             let pitch = simd_quatf(angle: rotation.y, axis: .right)
             
-            object.transform.set(rotation: yaw * pitch)
+            object.transform.rotation = yaw * pitch
             
             var direction = {
                 var direction: simd_float3 = .init(0, 0, 0)
@@ -43,7 +43,7 @@ extension Script {
             
             let movement = simd_normalize(right) * direction.x + simd_normalize(forward) * direction.z + .up * direction.y
             
-            object.transform.set(position: object.transform.position + movement * speed * delta)
+            object.transform.position = object.transform.position + movement * speed * delta
         }
     }
 }
