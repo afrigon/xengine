@@ -1,8 +1,11 @@
 import Metal
 
-protocol RenderTarget {
-    var renderPassDescriptor: MTLRenderPassDescriptor? { get }
-
-    func setup(width: Int, height: Int, device: MTLDevice)
-    func resize(width: Int, height: Int, device: MTLDevice)
+class RenderTarget {
+    let descriptor: RenderTargetDescriptor
+    var texture: MTLTexture?
+    
+    init(descriptor: RenderTargetDescriptor, texture: MTLTexture?) {
+        self.descriptor = descriptor
+        self.texture = texture
+    }
 }

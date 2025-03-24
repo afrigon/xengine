@@ -3,15 +3,15 @@ import MetalKit
 
 class MetalRenderer {
     private(set) var repository: MetalResourceRepository
-    
-    private let colorPixelFormat: MTLPixelFormat = .bgra8Unorm_srgb
-    private let normalPixelFormat: MTLPixelFormat = .bgra8Unorm_srgb
-    private let depthPixelFormat: MTLPixelFormat = .depth32Float
-    
+    private(set) var targetPool: RenderTargetPool
+
     private var device: MTLDevice
     private var library: MTLLibrary
     private var commandQueue: MTLCommandQueue
     
+    private var sceneRenderPassDescriptor: MTLRenderPassDescriptor? = nil
+    private var outputRenderPassDescriptor: MTLRenderPassDescriptor? = nil
+
     private lazy var depthStencilState: MTLDepthStencilState = {
         let descriptor = MTLDepthStencilDescriptor()
         descriptor.isDepthWriteEnabled = true
@@ -24,13 +24,6 @@ class MetalRenderer {
         return depthStencilState
     }()
 
-    private var sceneRenderTarget: ColorDepthNormalRenderTarget
-    private var postRenderTargetA: ColorRenderTarget
-    private var postRenderTargetB: ColorRenderTarget
-    private var outputRenderTarget: ScreenColorRenderTarget
-
-    private var ssaoNoise: NoiseTexture?
-
     init?() {
         guard let device = MTLCreateSystemDefaultDevice(),
               let library = try? device.makeDefaultLibrary(bundle: Bundle.module),
@@ -39,30 +32,23 @@ class MetalRenderer {
         }
         
         self.device = device
-        self.repository = .init(device: device)
         self.library = library
         self.commandQueue = commandQueue
-        
-        self.sceneRenderTarget = ColorDepthNormalRenderTarget(colorFormat: colorPixelFormat, normalFormat: normalPixelFormat, depthFormat: depthPixelFormat)
-        self.postRenderTargetA = ColorRenderTarget(colorFormat: colorPixelFormat)
-        self.postRenderTargetB = ColorRenderTarget(colorFormat: colorPixelFormat)
-        self.outputRenderTarget = ScreenColorRenderTarget(colorFormat: colorPixelFormat)
+        self.repository = .init(device: device)
+        self.targetPool = .init(device: device)
     }
     
     @MainActor
     func setup(with view: MTKView) {
         view.device = device
-        view.colorPixelFormat = colorPixelFormat
-        view.depthStencilPixelFormat = depthPixelFormat
+        view.colorPixelFormat = .bgra8Unorm_srgb
+        view.depthStencilPixelFormat = .depth32Float
         
-        resizeTextures(width: Int(view.frame.width), height: Int(view.frame.height))
-        
-        ssaoNoise = NoiseTexture(
-            width: 800,
-            height: 600,
-            generator: WhiteNoise(),
-            device: device
-        )
+        targetPool.set(.color, descriptor: .init())
+        targetPool.set(.normal, descriptor: .init())
+        targetPool.set(.depth, descriptor: .init(pixelFormat: .depth32Float))
+        targetPool.set(.postSwapA, descriptor: .init())
+        targetPool.set(.postSwapB, descriptor: .init())
     }
     
     func resize(width: UInt32, height: UInt32) {
@@ -74,10 +60,30 @@ class MetalRenderer {
             return
         }
         
-        sceneRenderTarget.resize(width: Int(width), height: Int(height), device: device)
-        postRenderTargetA.resize(width: Int(width), height: Int(height), device: device)
-        postRenderTargetB.resize(width: Int(width), height: Int(height), device: device)
-        outputRenderTarget.resize(width: Int(width), height: Int(height), device: device)
+        targetPool.resize(width: Int(width), height: Int(height))
+
+        if let color = targetPool.get(.color),
+           let normal = targetPool.get(.normal),
+           let depth = targetPool.get(.depth) {
+            sceneRenderPassDescriptor = MTLRenderPassDescriptor()
+            sceneRenderPassDescriptor?.colorAttachments[0].texture = color
+            sceneRenderPassDescriptor?.colorAttachments[0].loadAction = .clear
+            sceneRenderPassDescriptor?.colorAttachments[0].storeAction = .store
+
+            sceneRenderPassDescriptor?.colorAttachments[1].texture = normal
+            sceneRenderPassDescriptor?.colorAttachments[1].loadAction = .clear
+            sceneRenderPassDescriptor?.colorAttachments[1].storeAction = .store
+            sceneRenderPassDescriptor?.colorAttachments[1].clearColor = .init(red: 0.5, green: 0.5, blue: 1, alpha: 1)
+
+            sceneRenderPassDescriptor?.depthAttachment.texture = depth
+            sceneRenderPassDescriptor?.depthAttachment.loadAction = .clear
+            sceneRenderPassDescriptor?.depthAttachment.storeAction = .store
+            sceneRenderPassDescriptor?.depthAttachment.clearDepth = 1.0
+        }
+        
+        outputRenderPassDescriptor = MTLRenderPassDescriptor()
+        outputRenderPassDescriptor?.colorAttachments[0].loadAction = .clear
+        outputRenderPassDescriptor?.colorAttachments[0].storeAction = .store
     }
     
     @MainActor
@@ -92,40 +98,40 @@ class MetalRenderer {
             return
         }
         
+        targetPool.output = drawable.texture
+        outputRenderPassDescriptor?.colorAttachments[0].texture = drawable.texture
+
         guard let camera = scene.mainCamera else {
             return
         }
         
+        let clearColor = MTLClearColor(
+            red: Double(camera.clearColor.red),
+            green: Double(camera.clearColor.green),
+            blue: Double(camera.clearColor.blue),
+            alpha: Double(camera.clearColor.alpha)
+        )
+        
+        sceneRenderPassDescriptor?.colorAttachments[0].clearColor = clearColor
+        outputRenderPassDescriptor?.colorAttachments[0].clearColor = clearColor
+
         drawFrame(on: drawable) { commandBuffer in
-            guard let sceneTexture = drawScene(scene: scene, globals: globals, debug: debug, commandBuffer: commandBuffer) else {
-                return
+            drawScene(scene: scene, globals: globals, debug: debug, commandBuffer: commandBuffer)
+//            let processed = drawPost(effects: camera.postProcessing.effects, globals: globals, commandBuffer: commandBuffer)
+            if let color = targetPool.get(.color) {
+                drawOutput(from: color, commandBuffer: commandBuffer)
             }
-            
-            let processed = drawPost(
-                from: sceneTexture,
-                effects: camera.postProcessing.effects,
-                globals: globals,
-                commandBuffer: commandBuffer
-            )
-            
-            // this is where UI element would be rendered but it is not supported yet.
-            // The intended way of doing UI is to layer SwiftUI on top of the MetalView.
-            
-            // TODO: instead of drawing an identity post processing to the final display. the last layer of post processing should be drawn to the screen.
-            drawOutput(from: processed, to: drawable.texture, commandBuffer: commandBuffer)
         }
     }
     
-    private func drawScene(scene: GameScene, globals: Globals, debug: DebugOptions, commandBuffer: MTLCommandBuffer) -> MTLTexture? {
+    private func drawScene(scene: GameScene, globals: Globals, debug: DebugOptions, commandBuffer: MTLCommandBuffer) {
         guard let camera = scene.mainCamera else {
-            return nil
+            return
         }
-        
-        sceneRenderTarget.setClearColor(camera.clearColor)
-        
-        guard let descriptor = sceneRenderTarget.renderPassDescriptor,
+
+        guard let descriptor = sceneRenderPassDescriptor,
               let sceneEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
-            fatalError("Failed to make render command encoder.")
+            return
         }
         
         sceneEncoder.label = "Scene Encoder"
@@ -229,17 +235,22 @@ class MetalRenderer {
                             let data = BlinnPhongData(
                                 directionalLightCount: UInt32(directionalLights.count),
                                 useAlbedoTexture: m.useAlbedoTexture,
-                                albedoColor: m.albedoColor.rgb,
+                                albedoColor: m.albedoColor.rgba,
                                 specularStrength: m.specularStrength,
                                 shininess: m.shininess,
                                 eyePosition: camera.transform.position,
-                                alphaCutoff: material.commonOptions.renderingMode.alphaCutoff
+                                alphaCutoff: material.commonOptions.renderingMode.alphaCutoff,
+                                tiling: m.samplingOptions.tiling,
+                                offset: m.samplingOptions.offset
                             )
                             sceneEncoder.setFragmentBytes([data], length: MemoryLayout<BlinnPhongData>.stride, index: 1)
                             sceneEncoder.setFragmentBytes(directionalLights, length: MemoryLayout<DirectionalLight>.stride * directionalLights.count, index: 2)
                             
-                            if let albedoId = m.albedo, let albedo = repository.textures[albedoId] {
-                                sceneEncoder.setFragmentTexture(albedo, index: 3)
+                            if let albedoId = m.albedo,
+                               let albedo = repository.textures[albedoId],
+                               let sampler = repository.createOrGetSampler(albedo.options) {
+                                sceneEncoder.setFragmentTexture(albedo.texture, index: 3)
+                                sceneEncoder.setFragmentSamplerState(sampler, index: 4)
                             }
                         case .normals:
                             break
@@ -317,96 +328,91 @@ class MetalRenderer {
         }
         
         sceneEncoder.endEncoding()
-        
-        return sceneRenderTarget.colorTexture
     }
     
-    private func drawPost(
-        from input: MTLTexture,
-        effects: [PostProcessingEffect],
-        globals: Globals,
-        commandBuffer: MTLCommandBuffer
-    ) -> MTLTexture {
-        var output: MTLTexture = input
-        var usingA: Bool = true
-        
-        for effect in effects {
-            guard let descriptor = usingA ? postRenderTargetA.renderPassDescriptor : postRenderTargetB.renderPassDescriptor,
-                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
-                fatalError("Failed to make render command encoder.")
-            }
-            encoder.label = "Post Processing Encoder \(usingA ? "A" : "B") (\(effect.shader))"
-            
-            guard let target = usingA ? postRenderTargetA.colorTexture : postRenderTargetB.colorTexture else {
-                continue
-            }
-            
-            drawPostLayer(
-                from: output,
-                to: target,
-                effect: effect,
-                postEncoder: encoder,
-                globals: globals
-            )
-            
-            usingA = !usingA
-            output = target
-        }
-        
-        return output
-    }
+//    private func drawPost(
+//        effects: [PostProcessingEffect],
+//        globals: Globals,
+//        commandBuffer: MTLCommandBuffer
+//    ) -> MTLTexture {
+//        var output: MTLTexture = input
+//        var usingA: Bool = true
+//        
+//        for effect in effects {
+//            guard let descriptor = usingA ? postRenderTargetA.renderPassDescriptor : postRenderTargetB.renderPassDescriptor,
+//                  let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
+//                fatalError("Failed to make render command encoder.")
+//            }
+//            encoder.label = "Post Processing Encoder \(usingA ? "A" : "B") (\(effect.shader))"
+//            
+//            guard let target = usingA ? postRenderTargetA.colorTexture : postRenderTargetB.colorTexture else {
+//                continue
+//            }
+//            
+//            drawPostLayer(
+//                from: output,
+//                to: target,
+//                effect: effect,
+//                postEncoder: encoder,
+//                globals: globals
+//            )
+//            
+//            usingA = !usingA
+//            output = target
+//        }
+//        
+//        return output
+//    }
+//    
+//    private func drawPostLayer(
+//        from input: MTLTexture,
+//        to output: MTLTexture,
+//        effect: PostProcessingEffect,
+//        postEncoder: MTLRenderCommandEncoder,
+//        globals: Globals
+//    ) {
+//        defer {
+//            postEncoder.endEncoding()
+//        }
+//        
+//        let pipeline = repository.createOrGetShader(effect.shader, type: "post") {
+//            self.createPostRenderPipelineState(effect.shader)
+//        }
+//        
+//        postEncoder.setRenderPipelineState(pipeline)
+//        
+//        postEncoder.setFragmentTexture(input, index: 0)
+//        
+//        if effect.needsDepthTexture {
+//            postEncoder.setFragmentTexture(sceneRenderTarget.depthTexture, index: 1)
+//        }
+//        
+//        if effect.needsNormalTexture {
+//            postEncoder.setFragmentTexture(sceneRenderTarget.normalTexture, index: 2)
+//        }
+//
+//        postEncoder.setFragmentBytes([globals], length: MemoryLayout<Globals>.stride, index: 3)
+//
+//        switch effect {
+//            case .fxaa(let options):
+//                postEncoder.setFragmentBytes([options], length: MemoryLayout<FXAAOptions>.stride, index: 4)
+//            case .fog(let options):
+//                postEncoder.setFragmentBytes([options], length: MemoryLayout<FogOptions>.stride, index: 4)
+//            case .ssao:
+//                guard let noise = ssaoNoise?.texture else {
+//                    return
+//                }
+//                
+//                postEncoder.setFragmentTexture(noise, index: 5)
+//            default:
+//                break
+//        }
+//        
+//        postEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+//    }
     
-    private func drawPostLayer(
-        from input: MTLTexture,
-        to output: MTLTexture,
-        effect: PostProcessingEffect,
-        postEncoder: MTLRenderCommandEncoder,
-        globals: Globals
-    ) {
-        defer {
-            postEncoder.endEncoding()
-        }
-        
-        let pipeline = repository.createOrGetShader(effect.shader, type: "post") {
-            self.createPostRenderPipelineState(effect.shader)
-        }
-        
-        postEncoder.setRenderPipelineState(pipeline)
-        
-        postEncoder.setFragmentTexture(input, index: 0)
-        
-        if effect.needsDepthTexture {
-            postEncoder.setFragmentTexture(sceneRenderTarget.depthTexture, index: 1)
-        }
-        
-        if effect.needsNormalTexture {
-            postEncoder.setFragmentTexture(sceneRenderTarget.normalTexture, index: 2)
-        }
-
-        postEncoder.setFragmentBytes([globals], length: MemoryLayout<Globals>.stride, index: 3)
-
-        switch effect {
-            case .fxaa(let options):
-                postEncoder.setFragmentBytes([options], length: MemoryLayout<FXAAOptions>.stride, index: 4)
-            case .fog(let options):
-                postEncoder.setFragmentBytes([options], length: MemoryLayout<FogOptions>.stride, index: 4)
-            case .ssao:
-                guard let noise = ssaoNoise?.texture else {
-                    return
-                }
-                
-                postEncoder.setFragmentTexture(noise, index: 5)
-            default:
-                break
-        }
-        
-        postEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
-    }
-    
-    private func drawOutput(from input: MTLTexture, to output: MTLTexture, commandBuffer: MTLCommandBuffer) {
-        outputRenderTarget.set(color: output)
-        
-        guard let descriptor = outputRenderTarget.renderPassDescriptor,
+    private func drawOutput(from input: MTLTexture, commandBuffer: MTLCommandBuffer) {
+        guard let descriptor = outputRenderPassDescriptor,
               let outputEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
             fatalError("Failed to make render command encoder.")
         }
@@ -442,9 +448,9 @@ class MetalRenderer {
         descriptor.vertexFunction = library.makeFunction(name: "vertex_\(type)")
         descriptor.fragmentFunction = library.makeFunction(name: "fragment_\(shader)")
 
-        descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
-        descriptor.colorAttachments[1].pixelFormat = normalPixelFormat
-        descriptor.depthAttachmentPixelFormat = depthPixelFormat
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm_srgb
+        descriptor.colorAttachments[1].pixelFormat = .bgra8Unorm_srgb
+        descriptor.depthAttachmentPixelFormat = .depth32Float
         descriptor.stencilAttachmentPixelFormat = .invalid
         
         do {
@@ -461,7 +467,7 @@ class MetalRenderer {
         descriptor.vertexFunction = library.makeFunction(name: "vertex_quad")
         descriptor.fragmentFunction = library.makeFunction(name: "fragment_post_\(shader)")
 
-        descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
+        descriptor.colorAttachments[0].pixelFormat = .bgra8Unorm_srgb
         descriptor.depthAttachmentPixelFormat = .invalid
         descriptor.stencilAttachmentPixelFormat = .invalid
         

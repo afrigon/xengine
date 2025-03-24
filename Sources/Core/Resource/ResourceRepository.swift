@@ -7,5 +7,5 @@ public protocol ResourceRepository {
     
     func registerMesh(_ name: String, mesh: Mesh)
     func registerMaterial(_ name: String, material: Material)
-    func registerTexture(_ name: String, url: URL)
+    func registerTexture(_ name: String, url: URL, options: TextureOptions)
 }

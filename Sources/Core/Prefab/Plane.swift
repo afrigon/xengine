@@ -3,10 +3,10 @@ import Foundation
 extension Mesh {
     public static var plane: Mesh {
         let vertices: [SIMD3<Float>] = [
-            .init(-0.5,  0.5, 0.0),  // 0
-            .init( 0.5,  0.5, 0.0),  // 1
-            .init( 0.5, -0.5, 0.0),  // 2
-            .init(-0.5, -0.5, 0.0)   // 3
+            .init(-0.5, 0.0,  0.5),  // 0
+            .init( 0.5, 0.0,  0.5),  // 1
+            .init( 0.5, 0.0, -0.5),  // 2
+            .init(-0.5, 0.0, -0.5)   // 3
         ]
         
         let uv: [SIMD2<Float>] = [
@@ -19,10 +19,10 @@ extension Mesh {
         let indices: [UInt32] = [0, 1, 2, 0, 2, 3]
         
         let normals: [SIMD3<Float>] = [
-            .init(0, 0, -1),
-            .init(0, 0, -1),
-            .init(0, 0, -1),
-            .init(0, 0, -1)
+            .init(0, 1, 0),
+            .init(0, 1, 0),
+            .init(0, 1, 0),
+            .init(0, 1, 0)
         ]
         
         let tangents: [SIMD3<Float>] = [

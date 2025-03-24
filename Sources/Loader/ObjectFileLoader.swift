@@ -40,6 +40,9 @@ public struct ObjectFileLoader {
             var normals: [simd_float3] = []
             var uvs: [simd_float2] = []
             var indices: [(Int, Int, Int)] = []
+            var vertexOffset = 0
+            var normalOffset = 0
+            var uvOffset = 0
 
             for line in lines {
                 let instruction = parse(line: line)
@@ -52,10 +55,18 @@ public struct ObjectFileLoader {
                     case .uv(let uv):
                         uvs.append(uv)
                     case .face(let face):
-                        indices.append(contentsOf: face)
+                        indices.append(contentsOf: face.map {
+                            ($0.0 - vertexOffset, $0.1 - uvOffset, $0.2 - normalOffset)
+                        })
                     case .object(let name):
                         if let meshIdentifier {
-                            let mesh = createMesh(vertices: vertices, normals: normals, uvs: uvs, faces: indices)
+                            let mesh = createMesh(
+                                vertices: vertices,
+                                normals: normals,
+                                uvs: uvs,
+                                faces: indices
+                            )
+                            
                             repository.registerMesh(meshIdentifier, mesh: mesh)
                             
                             let submesh = GameObject()
@@ -63,6 +74,10 @@ public struct ObjectFileLoader {
                             submesh.addComponent(component: MeshRenderer(mesh: meshIdentifier, material: material))
                             object.addChild(submesh)
                         }
+                        
+                        vertexOffset += vertices.count
+                        normalOffset += normals.count
+                        uvOffset += uvs.count
                         
                         vertices = []
                         normals = []
@@ -176,7 +191,9 @@ public struct ObjectFileLoader {
         for (vertexIndex, uvIndex, normalIndex) in faces {
             v.append(vertices[vertexIndex - 1])
             n.append(normals[normalIndex - 1])
-            u.append(uvs[uvIndex - 1])
+            let uv = uvs[uvIndex - 1]
+            
+            u.append(.init(uv.x, 1 - uv.y))
             indices.append(UInt32(indices.count))
         }
         

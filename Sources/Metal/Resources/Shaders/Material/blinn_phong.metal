@@ -8,11 +8,13 @@ using namespace metal;
 struct BlinnPhongData {
     uint directional_light_count;
     bool use_albedo_texture;
-    float3 albedo_color;
+    float4 albedo_color;
     float specular_strength;
     float shininess;
     float3 eye_position;
     float alpha_cutoff;
+    float2 tiling;
+    float2 offset;
 };
 
 fragment FragmentOutput fragment_blinn_phong(
@@ -20,20 +22,11 @@ fragment FragmentOutput fragment_blinn_phong(
     constant Globals& globals                      [[buffer(0)]],
     constant BlinnPhongData& material_data         [[buffer(1)]],
     constant DirectionalLight* directional_lights  [[buffer(2)]],
-    texture2d<half> albedo                         [[texture(3)]]
+    texture2d<half> albedo                         [[texture(3)]],
+    sampler albedoSampler                          [[sampler(4)]]
 ) {
-//    constexpr sampler linearSampler(
-//        address::clamp_to_edge,
-//        mag_filter::linear,
-//        min_filter::linear
-//    );
+    float2 uv = input.uv0 * material_data.tiling + material_data.offset;
     
-    constexpr sampler linearSampler(
-        address::repeat,
-        mag_filter::nearest,
-        min_filter::nearest
-    );
-
     float3 diffuse = float3(0.0);
     float3 specular = float3(0.0);
     
@@ -52,7 +45,9 @@ fragment FragmentOutput fragment_blinn_phong(
     }
     
     float3 ambient = float3(0.1);
-    float4 albedo_output = material_data.use_albedo_texture ? float4(albedo.sample(linearSampler, input.uv0)) : float4(material_data.albedo_color, 1.0);
+    
+    float4 albedo_sample = material_data.use_albedo_texture ? float4(albedo.sample(albedoSampler, uv)) : float4(1.0);
+    float4 albedo_output = material_data.albedo_color * albedo_sample;
     
     if (albedo_output.a < material_data.alpha_cutoff) {
         discard_fragment();
